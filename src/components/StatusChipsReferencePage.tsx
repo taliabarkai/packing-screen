@@ -81,9 +81,6 @@ export function StatusChipsReferencePage() {
                         <Typography variant="body2" fontWeight={600}>
                           {STATUS_LABELS[status]}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary" sx={{ fontFamily: "monospace", display: "block" }}>
-                          {status}
-                        </Typography>
                       </TableCell>
                       <TableCell sx={{ verticalAlign: "middle" }}>
                         <Chip
@@ -105,23 +102,6 @@ export function StatusChipsReferencePage() {
                         <Typography variant="body2" sx={monospace}>
                           {config.bgcolor}
                         </Typography>
-                        {status === "pending" ? (
-                          <Typography
-                            variant="caption"
-                            color="text.secondary"
-                            display="block"
-                            sx={{
-                              "& code": {
-                                fontFamily: "ui-monospace, monospace",
-                                bgcolor: "transparent",
-                                color: "inherit",
-                                padding: 0,
-                              },
-                            }}
-                          >
-                            MUI <code>orange[50]</code>
-                          </Typography>
-                        ) : null}
                       </TableCell>
                       <TableCell sx={{ verticalAlign: "middle" }}>
                         <Typography variant="body2" sx={monospace}>
