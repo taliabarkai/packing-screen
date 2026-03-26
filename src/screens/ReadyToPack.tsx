@@ -575,6 +575,15 @@ type ShipmentMessage = {
   itemLabel: string;
 };
 
+/** Newest first; stable tie-break on id. Seed `at` values must stay ≤ real session time so new sends sort to top. */
+function compareShipmentMessagesNewestFirst(a: ShipmentMessage, b: ShipmentMessage): number {
+  const tb = new Date(b.at).getTime();
+  const ta = new Date(a.at).getTime();
+  if (Number.isNaN(ta) || Number.isNaN(tb)) return 0;
+  if (tb !== ta) return tb - ta;
+  return b.id.localeCompare(a.id);
+}
+
 /** Shipment-level “Apply to” scope and stored `itemLabel` for all-product remarks. */
 const REMARK_ALL_PRODUCTS_LABEL = "All Products";
 
@@ -661,7 +670,7 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
   return [
     {
       id: "seed-1",
-      at: "2026-12-23T16:16:00.000Z",
+      at: "2024-12-23T16:16:00.000Z",
       author: "Francisco.z",
       senderRole: "packer",
       channel: "packing",
@@ -671,7 +680,7 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
     },
     {
       id: "seed-2",
-      at: "2026-12-15T14:30:00.000Z",
+      at: "2024-12-15T14:30:00.000Z",
       author: "Alexander.D",
       senderRole: "packer",
       channel: "packing",
@@ -681,7 +690,7 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
     },
     {
       id: "seed-3",
-      at: "2026-12-12T03:23:00.000Z",
+      at: "2024-12-12T03:23:00.000Z",
       author: "Patricia.G",
       senderRole: "csr",
       channel: "csr",
@@ -692,7 +701,7 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
     },
     {
       id: "seed-4",
-      at: "2026-12-10T19:48:00.000Z",
+      at: "2024-12-10T19:48:00.000Z",
       author: "Alexander.D",
       senderRole: "packer",
       channel: "packing",
@@ -702,7 +711,7 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
     },
     {
       id: "seed-5",
-      at: "2026-12-08T11:00:00.000Z",
+      at: "2024-12-08T11:00:00.000Z",
       author: "CSR Team",
       senderRole: "csr",
       channel: "csr",
@@ -2341,7 +2350,9 @@ function ItemRemarksDialog({
   const productTitle = meta?.title ?? itemId;
 
   const filteredMessages = useMemo(() => {
-    return messages.filter((m) => m.itemId === itemId && (tab === "all" || m.channel === tab));
+    return messages
+      .filter((m) => m.itemId === itemId && (tab === "all" || m.channel === tab))
+      .sort(compareShipmentMessagesNewestFirst);
   }, [messages, itemId, tab]);
 
   return (
@@ -2414,7 +2425,7 @@ function ItemRemarksDialog({
           }}
         >
           <Tab label="All" value="all" />
-          <Tab label="Packing" value="packing" />
+          <Tab label="Packers" value="packing" />
           <Tab label="CSR" value="csr" />
         </Tabs>
         <Box
@@ -2898,12 +2909,7 @@ export default function ReadyToPack() {
   const filteredRemarksMessages = useMemo(() => {
     return shipmentMessages
       .filter((m) => remarksTab === "all" || m.channel === remarksTab)
-      .sort((a, b) => {
-        const tb = new Date(b.at).getTime();
-        const ta = new Date(a.at).getTime();
-        if (tb !== ta) return tb - ta;
-        return b.id.localeCompare(a.id);
-      });
+      .sort(compareShipmentMessagesNewestFirst);
   }, [shipmentMessages, remarksTab]);
 
   const remarkCountByItemId = useMemo(() => {
@@ -3304,25 +3310,19 @@ export default function ReadyToPack() {
 
             <Stack
               direction="row"
-              alignItems="flex-start"
+              alignItems="stretch"
+              useFlexGap
+              spacing={2}
               sx={{
                 width: "100%",
                 minWidth: 0,
                 overflowX: "auto",
                 flexWrap: "nowrap",
+                justifyContent: "space-between",
                 pb: 0.5,
-                gap: "44px",
               }}
             >
-              <Stack
-                direction="row"
-                alignItems="flex-start"
-                justifyContent="flex-start"
-                useFlexGap
-                spacing={2}
-                sx={{ flex: "1 1 0%", minWidth: 0, flexWrap: "nowrap" }}
-              >
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Shipment ID">
                     <Stack direction="row" alignItems="center" spacing={1}>
                       <DetailValue>{displayedShipmentId}</DetailValue>
@@ -3333,14 +3333,16 @@ export default function ReadyToPack() {
                       ) : null}
                     </Stack>
                   </FieldBlock>
-                </Box>
-                <Box
-                  sx={{
-                    flex: "0 0 auto",
-                    minWidth: { xs: 220, sm: 280 },
-                    maxWidth: "100%",
-                  }}
-                >
+              </Box>
+              <Box
+                sx={{
+                  flex: "0 0 auto",
+                  alignSelf: "flex-start",
+                  minWidth: 0,
+                  maxWidth: "100%",
+                  ...(trackingManualMode ? { minWidth: { xs: 220, sm: 280 } } : {}),
+                }}
+              >
                   <FieldBlock label="Tracking ID">
                     {trackingManualMode ? (
                       <Stack spacing={0.5} sx={{ alignItems: "flex-start", minWidth: 0, maxWidth: "100%" }}>
@@ -3429,8 +3431,8 @@ export default function ReadyToPack() {
                       </Stack>
                     )}
                   </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              </Box>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Carrier Route">
                     <Stack spacing={0.5}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 28 }}>
@@ -3452,8 +3454,8 @@ export default function ReadyToPack() {
                       </ShipmentFieldActionArea>
                     </Stack>
                   </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              </Box>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Destination">
                     <Stack spacing={0.5}>
                       <DetailValue>{destinationDisplay}</DetailValue>
@@ -3464,8 +3466,7 @@ export default function ReadyToPack() {
                       </ShipmentFieldActionArea>
                     </Stack>
                   </FieldBlock>
-                </Box>
-              </Stack>
+              </Box>
               <Divider
                 orientation="vertical"
                 flexItem
@@ -3475,15 +3476,7 @@ export default function ReadyToPack() {
                   flexShrink: 0,
                 }}
               />
-              <Stack
-                direction="row"
-                alignItems="flex-start"
-                justifyContent="flex-start"
-                useFlexGap
-                spacing={2}
-                sx={{ flex: "1 1 0%", minWidth: 0, flexWrap: "nowrap", width: "100%" }}
-              >
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Order Number">
                     <Stack spacing={0.5}>
                       <DetailValue>{displayedOrderNumberForDetails ?? ""}</DetailValue>
@@ -3494,23 +3487,23 @@ export default function ReadyToPack() {
                       </ShipmentFieldActionArea>
                     </Stack>
                   </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              </Box>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Order Date">
                     <DetailValue>12/12/2024</DetailValue>
                   </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              </Box>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Due Date">
                     <DetailValue>12/23/2024</DetailValue>
                   </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              </Box>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Site ID">
                     <DetailValue>27</DetailValue>
                   </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+              </Box>
+              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
                   <FieldBlock label="Event">
                     <Box
                       sx={{
@@ -3529,8 +3522,7 @@ export default function ReadyToPack() {
                       51-20E
                     </Box>
                   </FieldBlock>
-                </Box>
-              </Stack>
+              </Box>
             </Stack>
           </Stack>
         </Paper>
@@ -4045,7 +4037,7 @@ export default function ReadyToPack() {
                 }}
               >
                 <Tab label="All" value="all" />
-                <Tab label="Packing" value="packing" />
+                <Tab label="Packers" value="packing" />
                 <Tab label="CSR" value="csr" />
               </Tabs>
               <Box
