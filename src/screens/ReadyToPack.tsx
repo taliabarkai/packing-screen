@@ -503,6 +503,7 @@ function ShipmentFieldActionLink({
         letterSpacing: "0.15px",
         cursor: "pointer",
         alignSelf: "flex-start",
+        color: "primary.dark",
       }}
     >
       {children}
@@ -1416,7 +1417,6 @@ function SendToFixDialog({
 }
 
 /** Design ref 2056:22696 — pending / sent-to-fix acknowledgement. */
-const PENDING_MODAL_ICON_TERRACOTTA = "#C05621";
 const PENDING_MODAL_ICON_CIRCLE_BG = "#FEF3E7";
 const PENDING_MODAL_REASON_BOX_BG = "#F5F5F5";
 
@@ -1527,7 +1527,7 @@ function ShipmentPendingDialog({
               justifyContent: "center",
             }}
           >
-            <PendingOutlinedIcon sx={{ fontSize: 36, color: PENDING_MODAL_ICON_TERRACOTTA }} />
+            <PendingOutlinedIcon sx={{ fontSize: 36, color: "warning.main" }} />
           </Box>
           <Typography
             variant="body1"
@@ -3859,7 +3859,13 @@ export default function ReadyToPack() {
                       bgcolor: packingStatusChip.bgcolor,
                       color: packingStatusChip.color,
                       fontWeight: 500,
-                      px: 1,
+                      pl: "12px",
+                      pr: "16px",
+                      gap: "12px",
+                      pt: "8px",
+                      pb: "8px",
+                      height: "fit-content",
+                      "& .MuiChip-label": { pl: "1px", pr: "1px", fontSize: 16, letterSpacing: "0.15px" },
                       borderRadius: 999,
                       border: packingStatusChip.border ? "1px solid" : "none",
                       borderColor: packingStatusChip.borderColor,
@@ -3900,7 +3906,7 @@ export default function ReadyToPack() {
                         },
                       }}
                     >
-                      This shipment has a similar order.
+                      <AlertTitle sx={{ mb: 0 }}>This shipment has a similar order.</AlertTitle>
                     </Alert>
                   </>
                 ) : null}
@@ -3966,7 +3972,7 @@ export default function ReadyToPack() {
                         bgcolor: red[50],
                         color: "#5F2120",
                         "& .MuiAlert-icon": { color: "error.main" },
-                        "& .MuiAlert-message": { width: "100%", pt: 0.125, color: "#5F2120" },
+                        "& .MuiAlert-message": { width: "100%", pt: 1, color: "#5F2120" },
                       }}
                     >
                       <AlertTitle
