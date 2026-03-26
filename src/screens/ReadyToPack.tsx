@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type MouseEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import {
   Alert,
   AlertTitle,
@@ -9,6 +9,7 @@ import {
   Button,
   Checkbox,
   Chip,
+  CircularProgress,
   Dialog,
   DialogActions,
   DialogContent,
@@ -39,7 +40,7 @@ import {
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import type { Theme } from "@mui/material/styles";
-import { orange, purple, red } from "@mui/material/colors";
+import { orange, purple, red, teal } from "@mui/material/colors";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -57,6 +58,7 @@ import ErrorOutlineIcon from "@mui/icons-material/ErrorOutline";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ListAltIcon from "@mui/icons-material/ListAlt";
 import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlined";
@@ -71,6 +73,7 @@ import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SyncIcon from "@mui/icons-material/Sync";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
 
+import { loadNewSplitShipmentIdFromApi } from "../api/loadNewSplitShipmentId";
 import { loadTrackingNumberFromApi } from "../api/loadTrackingNumber";
 import oakAndLunaLogo from "../assets/oakandluna.svg";
 import tenenGroupLogo from "../assets/tenengroup.svg";
@@ -218,16 +221,39 @@ const elevationSx = {
 
 const ORDER_SEARCH_PLACEHOLDER = "Scan barcode or search by order/shipment ID";
 
-/** Prototype: full ready-to-pack UI — search `pack` or Next Order cycle start. */
+/** Prototype: full ready-to-pack UI — search `pack` or Next Order. */
 const PROTOTYPE_PACK_ORDER_ID = "pack";
-/** Prototype: load pending (sent-to-fix) queue — search `fix` or Next Order. */
+/** Prototype: pending queue — search `fix`, `pending`, or Next Order. */
 const PROTOTYPE_PENDING_ORDER_ID = "fix";
 /** Prototype: sorting station — search `sort`; full screen without pack checkbox / pack buttons (API tracks sorting). */
 const PROTOTYPE_SORT_STATION_ORDER_ID = "sort";
-/** Prototype: cancelled shipment — search `cancelled` or Next Order after `sort`. */
+/** Prototype: already packed shipment — search `packed` or Next Order. */
+const PROTOTYPE_PACKED_ORDER_ID = "packed";
+/** Prototype: cancelled shipment — search `cancelled` or Next Order. */
 const PROTOTYPE_CANCELLED_ORDER_ID = "cancelled";
 /** Prototype: on hold — search `hold` (Figma 1664:19401). */
 const PROTOTYPE_ON_HOLD_ORDER_ID = "hold";
+/** Prototype: similar orders (same address) — search `similar`; tabs to switch orders (Figma 2314:30804). */
+const PROTOTYPE_SIMILAR_ORDERS_ORDER_ID = "similar";
+
+type SimilarOrderTab = { key: string; shipmentId: string; orderNumber: string; tabLabel: string };
+
+/** Two prototype orders sharing the same destination (join via More actions). */
+const SIMILAR_ORDER_TABS: SimilarOrderTab[] = [
+  {
+    key: "similar-a",
+    shipmentId: "SH-12345",
+    orderNumber: "5847219",
+    tabLabel: "Order 5847219",
+  },
+  {
+    key: "similar-b",
+    shipmentId: "SH-92834",
+    orderNumber: "5847220",
+    tabLabel: "Order 5847220",
+  },
+];
+
 /** Shown in pending alert + shipment pending modal “reason for fix” (prototype). */
 const PROTOTYPE_PENDING_SENT_TO_FIX_BODY = "Chain was broken and one charm was missing";
 /** Status card detail under “Order status details” for cancelled (Figma 1544:6488). */
@@ -237,13 +263,13 @@ const PROTOTYPE_CANCELLED_STATUS_BODY =
 const PROTOTYPE_ON_HOLD_STATUS_BODY =
   "This shipment is on hold. Do not pack until the hold is released. Contact CSR if you need more information.";
 
-/** Next Order (prototype) cycles: ready to pack → pending → sorting → cancelled → on hold → … */
+/** Next Order (prototype): sort → pack → pending → packed → cancelled → (loops to sort). */
 const PROTOTYPE_NEXT_ORDER_CYCLE = [
+  PROTOTYPE_SORT_STATION_ORDER_ID,
   PROTOTYPE_PACK_ORDER_ID,
   PROTOTYPE_PENDING_ORDER_ID,
-  PROTOTYPE_SORT_STATION_ORDER_ID,
+  PROTOTYPE_PACKED_ORDER_ID,
   PROTOTYPE_CANCELLED_ORDER_ID,
-  PROTOTYPE_ON_HOLD_ORDER_ID,
 ] as const;
 
 function isPrototypePendingOrderId(id: string | null): boolean {
@@ -262,6 +288,14 @@ function isPrototypeOnHoldOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_ON_HOLD_ORDER_ID;
 }
 
+function isPrototypeSimilarOrdersId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
+}
+
+function isPrototypePackedOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_PACKED_ORDER_ID;
+}
+
 function getNextPrototypeCycleOrderId(current: string | null): string {
   const order = PROTOTYPE_NEXT_ORDER_CYCLE;
   if (!current) return order[0];
@@ -272,11 +306,14 @@ function getNextPrototypeCycleOrderId(current: string | null): string {
 
 function normalizeOrderIdForLoad(raw: string): string {
   const t = raw.trim();
-  if (t.toLowerCase() === PROTOTYPE_PACK_ORDER_ID) return PROTOTYPE_PACK_ORDER_ID;
-  if (t.toLowerCase() === PROTOTYPE_PENDING_ORDER_ID) return PROTOTYPE_PENDING_ORDER_ID;
-  if (t.toLowerCase() === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
-  if (t.toLowerCase() === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
-  if (t.toLowerCase() === PROTOTYPE_ON_HOLD_ORDER_ID) return PROTOTYPE_ON_HOLD_ORDER_ID;
+  const lower = t.toLowerCase();
+  if (lower === PROTOTYPE_PACK_ORDER_ID) return PROTOTYPE_PACK_ORDER_ID;
+  if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "pending") return PROTOTYPE_PENDING_ORDER_ID;
+  if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
+  if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
+  if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
+  if (lower === PROTOTYPE_ON_HOLD_ORDER_ID) return PROTOTYPE_ON_HOLD_ORDER_ID;
+  if (lower === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID) return PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
   return t;
 }
 
@@ -398,9 +435,9 @@ function NoShipmentsFoundHero({ shippingId }: { shippingId: string }) {
   );
 }
 
-function DetailLabel({ children }: { children: ReactNode }) {
+function DetailLabel({ children, sx }: { children: ReactNode; sx?: object }) {
   return (
-    <Typography variant="body1" fontWeight={500} color="#212121" letterSpacing="0.15px">
+    <Typography variant="body1" fontWeight={500} color="#212121" letterSpacing="0.15px" sx={sx}>
       {children}
     </Typography>
   );
@@ -418,14 +455,23 @@ function FieldBlock({
   label,
   children,
   minWidth,
+  align = "left",
 }: {
   label: string;
   children: ReactNode;
   minWidth?: number;
+  align?: "left" | "right";
 }) {
   return (
-    <Stack spacing={0.5} sx={{ minWidth: minWidth ?? "auto" }}>
-      <DetailLabel>{label}</DetailLabel>
+    <Stack
+      spacing={0.5}
+      sx={{
+        minWidth: minWidth ?? "auto",
+        alignItems: align === "right" ? "flex-end" : "flex-start",
+        textAlign: align === "right" ? "right" : "left",
+      }}
+    >
+      <DetailLabel sx={align === "right" ? { textAlign: "right", width: "100%" } : undefined}>{label}</DetailLabel>
       {children}
     </Stack>
   );
@@ -574,6 +620,17 @@ const PACK_LINE_ITEM_META: { id: string; title: string; itemListLabel: string }[
     itemListLabel: "3 — Premium Gift Kit",
   },
 ];
+
+const PACK_LINE_ITEM_IMAGES: readonly string[] = [IMG.item1, IMG.item2, IMG.item3];
+
+function buildSplitShipmentCurrentItems(): JoinTransferItem[] {
+  return PACK_LINE_ITEM_META.map((row, i) => ({
+    id: row.id,
+    title: row.title.replace(/^\d+\s*-\s*/, "").trim(),
+    image: PACK_LINE_ITEM_IMAGES[i] ?? IMG.item1,
+    movable: true,
+  }));
+}
 
 /** Remarks list timestamps (reference: 12/12/2026, 3:23 AM). */
 function formatRemarkRowDisplayTime(iso: string): string {
@@ -1432,8 +1489,25 @@ function ShipmentPendingDialog({
         </IconButton>
       </DialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
-      <DialogContent sx={{ pt: 3, pb: 3, px: 3, flexShrink: 0, flex: "1 1 auto", minHeight: 0 }}>
-        <Stack alignItems="center" spacing={2.5} sx={{ textAlign: "center" }}>
+      <DialogContent
+        sx={{
+          pt: 3,
+          pb: 3,
+          px: 3,
+          flexShrink: 0,
+          flex: "1 1 auto",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Stack
+          alignItems="center"
+          spacing={2.5}
+          sx={{ textAlign: "center", width: "100%", maxWidth: 440, mx: "auto" }}
+        >
           {/* Figma 2126:26531 — pending glyph (Material Pending outlined) */}
           <Box
             aria-hidden
@@ -1485,12 +1559,13 @@ function ShipmentPendingDialog({
               borderRadius: 1,
               bgcolor: PENDING_MODAL_REASON_BOX_BG,
               display: "flex",
-              alignItems: "flex-start",
-              gap: 1.5,
-              textAlign: "left",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: 1,
+              textAlign: "center",
             }}
           >
-            <ChatBubbleOutlineIcon sx={{ fontSize: 22, color: "text.secondary", flexShrink: 0, mt: 0.25 }} />
+            <ChatBubbleOutlineIcon sx={{ fontSize: 22, color: "text.secondary", flexShrink: 0 }} />
             <Typography variant="body2" sx={{ color: "text.primary", lineHeight: 1.5, letterSpacing: "0.15px" }}>
               <Box component="span" fontWeight={700}>
                 Reason for fix:
@@ -1535,6 +1610,15 @@ function joinShipmentDisplayRef(id: string) {
   if (t.startsWith("SH-")) return `#${t}`;
   if (t.toUpperCase().startsWith("SH")) return `#${t}`;
   return `#SH-${t}`;
+}
+
+function splitNewShipmentDisplayRef(id: string | null) {
+  if (id == null || !id.trim()) return "—";
+  const t = id.trim();
+  if (t.startsWith("#")) return t;
+  if (t.startsWith("SH-")) return `#${t}`;
+  if (/^\d+$/.test(t)) return `#${t}`;
+  return `#${t}`;
 }
 
 function JoinShipmentDialog({
@@ -1890,7 +1974,489 @@ function JoinShipmentDialog({
   );
 }
 
+function SplitShipmentDialog({
+  open,
+  onClose,
+  currentShipmentId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  currentShipmentId: string;
+}) {
+  const [currentItems, setCurrentItems] = useState<JoinTransferItem[]>([]);
+  const [newItems, setNewItems] = useState<JoinTransferItem[]>([]);
+  const [newShipmentId, setNewShipmentId] = useState<string | null>(null);
+  const splitBaselineKeyRef = useRef("");
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    const seed = buildSplitShipmentCurrentItems().map((x) => ({ ...x }));
+    splitBaselineKeyRef.current = joinLayoutKey(seed, []);
+    setCurrentItems(seed);
+    setNewItems([]);
+    setNewShipmentId(null);
+  }, [open, currentShipmentId]);
+
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const id = await loadNewSplitShipmentIdFromApi(currentShipmentId);
+        if (!cancelled) setNewShipmentId(id);
+      } catch (e) {
+        console.error(e);
+        const fallback = String(Math.floor(100_000_000 + Math.random() * 900_000_000));
+        if (!cancelled) setNewShipmentId(fallback);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open, currentShipmentId]);
+
+  const layoutKey = joinLayoutKey(currentItems, newItems);
+  const transferDirty = Boolean(splitBaselineKeyRef.current) && layoutKey !== splitBaselineKeyRef.current;
+
+  const moveToNew = (id: string) => {
+    let moved: JoinTransferItem | null = null;
+    setCurrentItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (!item?.movable) return prev;
+      moved = item;
+      return prev.filter((i) => i.id !== id);
+    });
+    if (moved) setNewItems((c) => [...c, moved!]);
+  };
+
+  const moveToCurrent = (id: string) => {
+    let moved: JoinTransferItem | null = null;
+    setNewItems((prev) => {
+      const item = prev.find((i) => i.id === id);
+      if (!item?.movable) return prev;
+      moved = item;
+      return prev.filter((i) => i.id !== id);
+    });
+    if (moved) setCurrentItems((s) => [...s, moved!]);
+  };
+
+  const handleConfirm = () => {
+    /* prototype: wire split API when available */
+    onClose();
+  };
+
+  const centerSwap = (
+    <Box
+      sx={{
+        width: 48,
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        position: "relative",
+        alignSelf: "stretch",
+      }}
+    >
+      <Box
+        sx={{
+          position: "absolute",
+          top: 0,
+          bottom: 0,
+          left: "50%",
+          width: "1px",
+          bgcolor: "divider",
+          transform: "translateX(-50%)",
+        }}
+      />
+      <Box sx={{ flex: 1, display: "flex", alignItems: "center", zIndex: 1, py: 2 }}>
+        <Box
+          sx={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            bgcolor: "grey.200",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <SwapHorizIcon sx={{ color: "text.secondary", fontSize: 22 }} />
+        </Box>
+      </Box>
+    </Box>
+  );
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      fullWidth
+      scroll="paper"
+      slotProps={{ backdrop: { sx: { bgcolor: "rgba(0,0,0,0.5)" } } }}
+      PaperProps={{
+        sx: {
+          width: "100%",
+          maxWidth: 960,
+          minHeight: 500,
+          maxHeight: "calc(100% - 64px)",
+          borderRadius: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          pr: 1,
+          pt: 2.5,
+          pb: 1,
+          flexShrink: 0,
+        }}
+      >
+        <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
+          Split Shipment
+        </Typography>
+        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <Divider sx={{ flexShrink: 0 }} />
+      <DialogContent
+        sx={{
+          pt: 3,
+          px: 3,
+          pb: 2,
+          flex: "1 1 auto",
+          minHeight: 420,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <Stack direction="row" spacing={0} sx={{ flex: 1, minHeight: 0, alignItems: "stretch" }}>
+          <Stack sx={{ flex: "1 1 0%", minWidth: 0, pr: 2 }} spacing={2}>
+            <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+              <Typography variant="subtitle1" fontWeight={600} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
+                Current Shipment ({currentItems.length} items)
+              </Typography>
+              <Typography variant="body2" fontWeight={700} color="text.primary" sx={{ flexShrink: 0 }}>
+                {joinShipmentDisplayRef(currentShipmentId)}
+              </Typography>
+            </Stack>
+            <Stack spacing={1.5} sx={{ overflow: "auto", pr: 0.5, flex: 1, minHeight: 0 }}>
+              {currentItems.map((item) => (
+                <Paper
+                  key={item.id}
+                  variant="outlined"
+                  sx={{
+                    p: 1.5,
+                    borderRadius: 1,
+                    borderColor: "divider",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 1.5,
+                  }}
+                >
+                  <Box
+                    component="img"
+                    src={item.image}
+                    alt=""
+                    sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
+                  />
+                  <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
+                    {item.title}
+                  </Typography>
+                  {item.movable ? (
+                    <Button
+                      size="small"
+                      color="primary"
+                      variant="outlined"
+                      endIcon={<ArrowForwardIcon sx={{ fontSize: 18 }} />}
+                      onClick={() => moveToNew(item.id)}
+                      sx={{
+                        flexShrink: 0,
+                        textTransform: "none",
+                        fontWeight: 600,
+                        letterSpacing: "0.3px",
+                        minWidth: "auto",
+                        px: 1,
+                      }}
+                    >
+                      MOVE
+                    </Button>
+                  ) : null}
+                </Paper>
+              ))}
+              {currentItems.length === 0 ? (
+                <Typography variant="body2" color="text.secondary">
+                  No items left in this shipment.
+                </Typography>
+              ) : null}
+            </Stack>
+          </Stack>
+
+          {centerSwap}
+
+          <Stack sx={{ flex: "1 1 0%", minWidth: 0, pl: 2 }} spacing={2}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between" spacing={1} flexWrap="wrap">
+              <Typography variant="subtitle1" fontWeight={600} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
+                New Shipment
+              </Typography>
+              <Stack direction="row" alignItems="center" spacing={1} sx={{ flexShrink: 0 }}>
+                {newShipmentId === null ? <CircularProgress size={18} thickness={5} /> : null}
+                <Typography variant="body2" fontWeight={700} color="text.primary">
+                  {splitNewShipmentDisplayRef(newShipmentId)}
+                </Typography>
+              </Stack>
+            </Stack>
+            <Paper
+              variant="outlined"
+              sx={{
+                flex: 1,
+                minHeight: 280,
+                display: "flex",
+                flexDirection: "column",
+                borderRadius: 1,
+                borderColor: "divider",
+                bgcolor: "background.paper",
+                overflow: "hidden",
+              }}
+            >
+              {newItems.length === 0 ? (
+                <Stack
+                  flex={1}
+                  alignItems="center"
+                  justifyContent="center"
+                  spacing={1.5}
+                  sx={{ px: 3, py: 6 }}
+                >
+                  <Inventory2OutlinedIcon sx={{ fontSize: 56, color: "action.disabled" }} />
+                  <Typography variant="body1" color="text.secondary" sx={{ letterSpacing: "0.15px" }}>
+                    Ready for Items
+                  </Typography>
+                </Stack>
+              ) : (
+                <Stack spacing={1.5} sx={{ overflow: "auto", p: 1.5, flex: 1, minHeight: 0 }}>
+                  {newItems.map((item) => (
+                    <Paper
+                      key={item.id}
+                      variant="outlined"
+                      sx={{
+                        p: 1.5,
+                        borderRadius: 1,
+                        borderColor: "divider",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 1.5,
+                        bgcolor: "background.paper",
+                      }}
+                    >
+                      <Box
+                        component="img"
+                        src={item.image}
+                        alt=""
+                        sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
+                      />
+                      <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
+                        {item.title}
+                      </Typography>
+                      {item.movable ? (
+                        <Button
+                          size="small"
+                          color="primary"
+                          variant="outlined"
+                          startIcon={<ArrowBackIcon sx={{ fontSize: 18 }} />}
+                          onClick={() => moveToCurrent(item.id)}
+                          sx={{
+                            flexShrink: 0,
+                            textTransform: "none",
+                            fontWeight: 600,
+                            letterSpacing: "0.3px",
+                            minWidth: "auto",
+                            px: 1,
+                          }}
+                        >
+                          MOVE
+                        </Button>
+                      ) : null}
+                    </Paper>
+                  ))}
+                </Stack>
+              )}
+            </Paper>
+          </Stack>
+        </Stack>
+      </DialogContent>
+      <Divider sx={{ flexShrink: 0 }} />
+      <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
+        <Button
+          variant="outlined"
+          color="inherit"
+          onClick={onClose}
+          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75, borderColor: "grey.400", color: "text.primary" }}
+        >
+          Cancel
+        </Button>
+        <Button
+          variant="contained"
+          color="primary"
+          disabled={!transferDirty}
+          onClick={handleConfirm}
+          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75 }}
+        >
+          Confirm & Save
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
 const CREATE_REMARK_MESSAGE_PLACEHOLDER = "Please write your message here";
+
+function ItemRemarksDialog({
+  open,
+  onClose,
+  itemId,
+  messages,
+  onSendMessage,
+}: {
+  open: boolean;
+  onClose: () => void;
+  itemId: string;
+  messages: ShipmentMessage[];
+  onSendMessage: () => void;
+}) {
+  const [tab, setTab] = useState<RemarksTabValue>("all");
+
+  useEffect(() => {
+    if (open) setTab("all");
+  }, [open, itemId]);
+
+  const meta = PACK_LINE_ITEM_META.find((x) => x.id === itemId);
+  const productTitle = meta?.title ?? itemId;
+
+  const filteredMessages = useMemo(() => {
+    return messages.filter((m) => m.itemId === itemId && (tab === "all" || m.channel === tab));
+  }, [messages, itemId, tab]);
+
+  return (
+    <Dialog
+      open={open}
+      onClose={onClose}
+      maxWidth={false}
+      fullWidth
+      scroll="paper"
+      PaperProps={{
+        sx: {
+          width: "100%",
+          maxWidth: 540,
+          maxHeight: "calc(100% - 64px)",
+          borderRadius: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        },
+      }}
+    >
+      <DialogTitle
+        sx={{
+          display: "flex",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+          gap: 2,
+          pr: 1,
+          pb: 1,
+          pt: 3,
+          px: 3,
+          flexShrink: 0,
+        }}
+      >
+        <Box sx={{ minWidth: 0 }}>
+          <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
+            Item remarks
+          </Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, letterSpacing: "0.15px" }}>
+            {productTitle}
+          </Typography>
+        </Box>
+        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <Divider sx={{ flexShrink: 0 }} />
+      <DialogContent
+        sx={{
+          px: 3,
+          pt: 2,
+          pb: 2,
+          flex: "1 1 auto",
+          minHeight: 0,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        <Tabs
+          value={tab}
+          onChange={(_, v: RemarksTabValue) => setTab(v)}
+          sx={{
+            minHeight: 40,
+            mb: 2,
+            borderBottom: 1,
+            borderColor: "divider",
+            flexShrink: 0,
+            "& .MuiTab-root": { textTransform: "none", fontWeight: 500, minHeight: 40 },
+          }}
+        >
+          <Tab label="All" value="all" />
+          <Tab label="Packing" value="packing" />
+          <Tab label="CSR" value="csr" />
+        </Tabs>
+        <Box
+          sx={{
+            border: "1px solid",
+            borderColor: "divider",
+            borderRadius: 1,
+            flex: "1 1 auto",
+            minHeight: 160,
+            maxHeight: 360,
+            overflow: "auto",
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
+          }}
+        >
+          {filteredMessages.length > 0 ? (
+            filteredMessages.map((m) => <MessageRow key={m.id} message={m} />)
+          ) : (
+            <Typography variant="body2" color="text.secondary" sx={{ p: 2 }}>
+              No remarks for this item yet.
+            </Typography>
+          )}
+        </Box>
+      </DialogContent>
+      <Divider sx={{ flexShrink: 0 }} />
+      <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
+        <Button variant="outlined" color="inherit" onClick={onClose} sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}>
+          Close
+        </Button>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={onSendMessage}
+          sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}
+        >
+          Send message
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
 
 function CreateRemarkDialog({
   open,
@@ -2288,19 +2854,38 @@ export default function ReadyToPack() {
   const [orderHistoryDialogOpen, setOrderHistoryDialogOpen] = useState(false);
   const [sendToFixDialogOpen, setSendToFixDialogOpen] = useState(false);
   const [joinShipmentDialogOpen, setJoinShipmentDialogOpen] = useState(false);
+  const [splitShipmentDialogOpen, setSplitShipmentDialogOpen] = useState(false);
   const [shipmentMessages, setShipmentMessages] = useState<ShipmentMessage[]>(() => buildInitialShipmentMessages());
   const [remarksTab, setRemarksTab] = useState<RemarksTabValue>("all");
   const [createRemarkOpen, setCreateRemarkOpen] = useState(false);
   const [createRemarkDefaultItemId, setCreateRemarkDefaultItemId] = useState<string | null>(null);
+  const [itemRemarksItemId, setItemRemarksItemId] = useState<string | null>(null);
   const [moreActionsMenuAnchor, setMoreActionsMenuAnchor] = useState<null | HTMLElement>(null);
   const [packingOrderUiStatus, setPackingOrderUiStatus] = useState<PackingOrderUiStatus>("readyToPack");
   const [sentToFixReason, setSentToFixReason] = useState<string | null>(null);
   /** After OK/Cancel, hide the pending notice until `loadedOrderId` changes again. */
   const [pendingShipmentDialogDismissed, setPendingShipmentDialogDismissed] = useState(false);
+  /** Prototype similar orders: which tab is active (Figma 2314:30804). */
+  const [similarOrdersTabIndex, setSimilarOrdersTabIndex] = useState(0);
 
   const orderPacked = packingOrderUiStatus === "packed";
   const isPackActionsBlocked = isPackingStatusBlockingActions(packingOrderUiStatus);
   const isSortingStationView = isSortingStationOrderId(loadedOrderId);
+  const isSimilarOrdersView = isPrototypeSimilarOrdersId(loadedOrderId);
+  const similarShipmentTabIndex = Math.min(
+    similarOrdersTabIndex,
+    SIMILAR_ORDER_TABS.length - 1,
+  );
+  const similarOrderDetailIndex = isSimilarOrdersView ? similarShipmentTabIndex : 0;
+  const activeSimilarOrder =
+    isSimilarOrdersView && SIMILAR_ORDER_TABS[similarOrderDetailIndex]
+      ? SIMILAR_ORDER_TABS[similarOrderDetailIndex]
+      : SIMILAR_ORDER_TABS[0];
+  const displayedShipmentId = isSimilarOrdersView ? activeSimilarOrder.shipmentId : "SH-12345";
+  const displayedOrderNumberForDetails =
+    isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.orderNumber : loadedOrderId;
+  const joinDialogShipmentId =
+    isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.shipmentId : loadedOrderId ?? "";
   const activeRoute = findShippingRoute(activeCarrierRouteId) ?? SHIPPING_ROUTE_ROWS[0];
   const activeCarrierLogoSrc = findCarrierLogoSrc(activeRoute);
   /** Hide pack checkbox + pack / send-to-fix / more-actions (sorting station is view-only for pack flow). */
@@ -2344,6 +2929,7 @@ export default function ReadyToPack() {
     const isFixQueue = isPrototypePendingOrderId(loadedOrderId);
     const isCancelledProto = isPrototypeCancelledOrderId(loadedOrderId);
     const isOnHoldProto = isPrototypeOnHoldOrderId(loadedOrderId);
+    const isPackedProto = isPrototypePackedOrderId(loadedOrderId);
     if (isCancelledProto) {
       setPackingOrderUiStatus("cancelled");
       setSentToFixReason(null);
@@ -2353,6 +2939,10 @@ export default function ReadyToPack() {
     } else if (isOnHoldProto) {
       setPackingOrderUiStatus("onHold");
       setSentToFixReason(null);
+    } else if (isPackedProto) {
+      setPackingOrderUiStatus("packed");
+      setSentToFixReason(null);
+      setItemsReviewed(true);
     } else {
       setPackingOrderUiStatus("readyToPack");
       setSentToFixReason(null);
@@ -2369,16 +2959,29 @@ export default function ReadyToPack() {
     setOrderHistoryDialogOpen(false);
     setSendToFixDialogOpen(false);
     setJoinShipmentDialogOpen(false);
+    setSplitShipmentDialogOpen(false);
     setShipmentMessages(buildInitialShipmentMessages());
     setRemarksTab("all");
     setCreateRemarkOpen(false);
     setCreateRemarkDefaultItemId(null);
+    setItemRemarksItemId(null);
     setMoreActionsMenuAnchor(null);
+    setSimilarOrdersTabIndex(0);
   }, [loadedOrderId]);
 
   const openCreateRemarkDialog = (defaultItemId: string | null) => {
     setCreateRemarkDefaultItemId(defaultItemId);
     setCreateRemarkOpen(true);
+  };
+
+  const openItemRemarksDialog = (itemId: string) => {
+    setItemRemarksItemId(itemId);
+  };
+
+  const handleItemRemarksSendMessage = () => {
+    const id = itemRemarksItemId;
+    setItemRemarksItemId(null);
+    if (id) openCreateRemarkDialog(id);
   };
 
   const handleCreateRemarkSend = ({
@@ -2618,29 +3221,25 @@ export default function ReadyToPack() {
             </Stack>
           </Paper>
 
-          <Stack direction="row" alignItems="center" spacing={isEmptyState ? 1 : 3} sx={{ flex: 1, justifyContent: "flex-end" }}>
+          <Stack direction="row" alignItems="center" spacing={3} sx={{ flex: 1, justifyContent: "flex-end" }}>
             <Tooltip title="Go to Order Manager">
               <IconButton size="medium" aria-label="Go to Order Manager">
                 <AssignmentOutlinedIcon />
               </IconButton>
             </Tooltip>
-            {!isEmptyState && (
-              <Divider orientation="vertical" flexItem sx={{ height: 40, borderColor: "divider" }} />
-            )}
+            <Divider orientation="vertical" flexItem sx={{ height: 40, borderColor: "divider" }} />
             <Stack direction="row" alignItems="center" spacing={1}>
               <IconButton sx={{ p: 0 }} aria-label="Account">
                 <Avatar sx={{ width: 32, height: 32, bgcolor: "#90a4ae", fontSize: 12 }}>JD</Avatar>
               </IconButton>
-              {!isEmptyState && (
-                <Stack>
-                  <Typography variant="body2" fontWeight={500} textAlign="center">
-                    John
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary" textAlign="center">
-                    Kiryat Gat
-                  </Typography>
-                </Stack>
-              )}
+              <Stack sx={{ minWidth: 0 }}>
+                <Typography variant="body2" fontWeight={500} textAlign="left">
+                  John
+                </Typography>
+                <Typography variant="caption" color="text.secondary" textAlign="left">
+                  Kiryat Gat
+                </Typography>
+              </Stack>
             </Stack>
           </Stack>
         </Toolbar>
@@ -2718,13 +3317,15 @@ export default function ReadyToPack() {
               <Stack
                 direction="row"
                 alignItems="flex-start"
-                justifyContent="space-between"
+                justifyContent="flex-start"
+                useFlexGap
+                spacing={2}
                 sx={{ flex: "1 1 0%", minWidth: 0, flexWrap: "nowrap" }}
               >
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Shipment ID">
                     <Stack direction="row" alignItems="center" spacing={1}>
-                      <DetailValue>SH-12345</DetailValue>
+                      <DetailValue>{displayedShipmentId}</DetailValue>
                       {shipmentDetailsEditUnlocked ? (
                         <Tooltip title="Merukazim">
                           <NorthEastIcon sx={{ color: "text.secondary", fontSize: 20, flexShrink: 0 }} />
@@ -2733,10 +3334,16 @@ export default function ReadyToPack() {
                     </Stack>
                   </FieldBlock>
                 </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box
+                  sx={{
+                    flex: "0 0 auto",
+                    minWidth: { xs: 220, sm: 280 },
+                    maxWidth: "100%",
+                  }}
+                >
                   <FieldBlock label="Tracking ID">
                     {trackingManualMode ? (
-                      <Stack spacing={0.5}>
+                      <Stack spacing={0.5} sx={{ alignItems: "flex-start", minWidth: 0, maxWidth: "100%" }}>
                         <Stack
                           direction="row"
                           alignItems="center"
@@ -2746,10 +3353,13 @@ export default function ReadyToPack() {
                             borderColor: "divider",
                             pb: 0.25,
                             minHeight: 36,
+                            width: "fit-content",
+                            maxWidth: "100%",
+                            minWidth: 0,
                           }}
                         >
                           <Tooltip title="Load">
-                            <Box component="span" sx={{ display: "inline-flex" }}>
+                            <Box component="span" sx={{ display: "inline-flex", flexShrink: 0 }}>
                               <IconButton
                                 size="small"
                                 aria-label="Load tracking number from API"
@@ -2767,12 +3377,18 @@ export default function ReadyToPack() {
                             placeholder="Enter/Load ID"
                             value={manualTrackingInput}
                             onChange={(e) => setManualTrackingInput(e.target.value)}
-                            fullWidth
                             inputProps={{ "aria-label": "Manual tracking ID" }}
                             sx={{
                               typography: "body1",
                               letterSpacing: "0.15px",
-                              flex: 1,
+                              flex: "0 1 auto",
+                              minWidth: 0,
+                              maxWidth: "100%",
+                              "& input": {
+                                minWidth: `${Math.max(14, manualTrackingInput.length, 12)}ch`,
+                                width: "auto",
+                                fieldSizing: "content",
+                              },
                               "& input::placeholder": { opacity: 1, color: "action.disabled" },
                             }}
                           />
@@ -2803,7 +3419,7 @@ export default function ReadyToPack() {
                         </Link>
                       </Stack>
                     ) : (
-                      <Stack spacing={0.5}>
+                      <Stack spacing={0.5} sx={{ alignItems: "flex-start", minWidth: 0, maxWidth: "100%" }}>
                         <DetailValue>None</DetailValue>
                         <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
                           <ShipmentFieldActionLink onClick={() => setTrackingManualMode(true)}>
@@ -2814,7 +3430,7 @@ export default function ReadyToPack() {
                     )}
                   </FieldBlock>
                 </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Carrier Route">
                     <Stack spacing={0.5}>
                       <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 28 }}>
@@ -2837,7 +3453,7 @@ export default function ReadyToPack() {
                     </Stack>
                   </FieldBlock>
                 </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Destination">
                     <Stack spacing={0.5}>
                       <DetailValue>{destinationDisplay}</DetailValue>
@@ -2862,13 +3478,15 @@ export default function ReadyToPack() {
               <Stack
                 direction="row"
                 alignItems="flex-start"
-                justifyContent="space-between"
-                sx={{ flex: "1 1 0%", minWidth: 0, flexWrap: "nowrap" }}
+                justifyContent="flex-start"
+                useFlexGap
+                spacing={2}
+                sx={{ flex: "1 1 0%", minWidth: 0, flexWrap: "nowrap", width: "100%" }}
               >
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Order Number">
                     <Stack spacing={0.5}>
-                      <DetailValue>{loadedOrderId}</DetailValue>
+                      <DetailValue>{displayedOrderNumberForDetails ?? ""}</DetailValue>
                       <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
                         <ShipmentFieldActionLink onClick={() => setOrderHistoryDialogOpen(true)}>
                           View History
@@ -2877,24 +3495,39 @@ export default function ReadyToPack() {
                     </Stack>
                   </FieldBlock>
                 </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Order Date">
                     <DetailValue>12/12/2024</DetailValue>
                   </FieldBlock>
                 </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Due Date">
                     <DetailValue>12/23/2024</DetailValue>
                   </FieldBlock>
                 </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
-                  <FieldBlock label="Event">
-                    <DetailValue>51-20E</DetailValue>
-                  </FieldBlock>
-                </Box>
-                <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
                   <FieldBlock label="Site ID">
                     <DetailValue>27</DetailValue>
+                  </FieldBlock>
+                </Box>
+                <Box sx={{ flex: "0 0 auto", minWidth: 0 }}>
+                  <FieldBlock label="Event">
+                    <Box
+                      sx={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        bgcolor: teal[50],
+                        color: teal[900],
+                        px: 1.25,
+                        py: 0.5,
+                        borderRadius: 1,
+                        typography: "body1",
+                        fontWeight: 500,
+                        letterSpacing: "0.15px",
+                      }}
+                    >
+                      51-20E
+                    </Box>
                   </FieldBlock>
                 </Box>
               </Stack>
@@ -2921,9 +3554,70 @@ export default function ReadyToPack() {
               ...elevationSx,
             }}
           >
-            <Typography variant="h6" sx={{ color: "primary.dark", mb: 2 }}>
-              Items to Pack ({PACK_ITEM_COUNT})
-            </Typography>
+            <Stack
+              direction="row"
+              alignItems="center"
+              justifyContent="flex-start"
+              flexWrap="wrap"
+              useFlexGap
+              spacing={2}
+              sx={{ mb: 2 }}
+            >
+              <Typography variant="h6" sx={{ color: "primary.dark", flexShrink: 0 }}>
+                Items to Pack ({PACK_ITEM_COUNT})
+              </Typography>
+              {isSimilarOrdersView ? (
+                <Tabs
+                  value={similarShipmentTabIndex}
+                  onChange={(_, v: number) => setSimilarOrdersTabIndex(v)}
+                  variant="scrollable"
+                  scrollButtons="auto"
+                  allowScrollButtonsMobile
+                  aria-label="Similar shipments"
+                  sx={{
+                    flex: "0 1 auto",
+                    minHeight: 40,
+                    minWidth: 0,
+                    maxWidth: "100%",
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    "& .MuiTab-root": {
+                      textTransform: "none",
+                      fontWeight: 500,
+                      fontSize: 15,
+                      letterSpacing: "0.15px",
+                      minHeight: 40,
+                      py: 0.75,
+                      color: "text.secondary",
+                      maxWidth: "none",
+                      "&&.Mui-selected": {
+                        color: "primary.main",
+                        fontWeight: 600,
+                      },
+                    },
+                    "& .MuiTabs-indicator": {
+                      top: "auto",
+                      bottom: 0,
+                      height: 3,
+                      borderRadius: "3px 3px 0 0",
+                    },
+                  }}
+                >
+                  {SIMILAR_ORDER_TABS.map((t, i) => (
+                    <Tab key={t.key} id={`similar-order-tab-${i}`} label={t.shipmentId} value={i} />
+                  ))}
+                </Tabs>
+              ) : null}
+            </Stack>
+            {isSimilarOrdersView ? (
+              <Alert
+                severity="info"
+                icon={<InfoOutlinedIcon />}
+                sx={{ mb: 2, alignItems: "center", "& .MuiAlert-message": { width: "100%" } }}
+              >
+                This order has a similar order.
+              </Alert>
+            ) : null}
             <Divider sx={{ mb: 2 }} />
 
             <ItemBlock
@@ -2932,7 +3626,7 @@ export default function ReadyToPack() {
               imageRadius={1}
               itemId={PACK_LINE_ITEM_META[0].id}
               itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[0].id] ?? 0}
-              onItemRemarksClick={() => openCreateRemarkDialog(PACK_LINE_ITEM_META[0].id)}
+              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[0].id)}
               details={
                 <>
                   <SectionOverline>Details</SectionOverline>
@@ -2973,7 +3667,7 @@ export default function ReadyToPack() {
               imageOverlay
               itemId={PACK_LINE_ITEM_META[1].id}
               itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[1].id] ?? 0}
-              onItemRemarksClick={() => openCreateRemarkDialog(PACK_LINE_ITEM_META[1].id)}
+              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[1].id)}
               details={
                 <>
                   <SectionOverline>Details</SectionOverline>
@@ -3029,7 +3723,7 @@ export default function ReadyToPack() {
               imageOverlay
               itemId={PACK_LINE_ITEM_META[2].id}
               itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[2].id] ?? 0}
-              onItemRemarksClick={() => openCreateRemarkDialog(PACK_LINE_ITEM_META[2].id)}
+              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[2].id)}
               details={
                 <>
                   <SectionOverline>Details</SectionOverline>
@@ -3389,16 +4083,27 @@ export default function ReadyToPack() {
                     fullWidth
                     variant="contained"
                     color="primary"
-                    disabled={!itemsReviewed || packingOrderUiStatus !== "readyToPack"}
+                    disabled={
+                      !itemsReviewed ||
+                      packingOrderUiStatus !== "readyToPack" ||
+                      (trackingManualMode && manualTrackingInput.trim() === "")
+                    }
                     onClick={() => {
-                      if (itemsReviewed && packingOrderUiStatus === "readyToPack") {
+                      if (
+                        itemsReviewed &&
+                        packingOrderUiStatus === "readyToPack" &&
+                        (!trackingManualMode || manualTrackingInput.trim() !== "")
+                      ) {
                         setPackingOrderUiStatus("packed");
                       }
                     }}
                     startIcon={
                       <ShoppingBagOutlinedIcon
                         sx={
-                          trackingManualMode && itemsReviewed && packingOrderUiStatus === "readyToPack"
+                          trackingManualMode &&
+                          itemsReviewed &&
+                          packingOrderUiStatus === "readyToPack" &&
+                          manualTrackingInput.trim() !== ""
                             ? { color: "#fff !important" }
                             : undefined
                         }
@@ -3414,7 +4119,8 @@ export default function ReadyToPack() {
                       letterSpacing: "0.46px",
                       textTransform: "uppercase",
                       ...(trackingManualMode &&
-                        packingOrderUiStatus === "readyToPack" && {
+                        packingOrderUiStatus === "readyToPack" &&
+                        manualTrackingInput.trim() !== "" && {
                           "&:not(.Mui-disabled)": {
                             bgcolor: "#ed6c02",
                             color: "#fff",
@@ -3511,6 +4217,7 @@ export default function ReadyToPack() {
                             setMoreActionsMenuAnchor(null);
                             if (id === "unpack-shipment") setPackingOrderUiStatus("readyToPack");
                             if (id === "join-shipment") setJoinShipmentDialogOpen(true);
+                            if (id === "split-shipment") setSplitShipmentDialogOpen(true);
                           }}
                           sx={{
                             py: 0.75,
@@ -3557,7 +4264,7 @@ export default function ReadyToPack() {
         <OrderHistoryLogDialog
           open={orderHistoryDialogOpen}
           onClose={() => setOrderHistoryDialogOpen(false)}
-          orderNumber={loadedOrderId}
+          orderNumber={displayedOrderNumberForDetails ?? loadedOrderId ?? ""}
         />
       )}
       {loadedOrderId && (
@@ -3583,9 +4290,25 @@ export default function ReadyToPack() {
         <JoinShipmentDialog
           open={joinShipmentDialogOpen}
           onClose={() => setJoinShipmentDialogOpen(false)}
-          currentShipmentId={loadedOrderId}
+          currentShipmentId={joinDialogShipmentId}
         />
       )}
+      {loadedOrderId && (
+        <SplitShipmentDialog
+          open={splitShipmentDialogOpen}
+          onClose={() => setSplitShipmentDialogOpen(false)}
+          currentShipmentId={joinDialogShipmentId}
+        />
+      )}
+      {loadedOrderId && itemRemarksItemId ? (
+        <ItemRemarksDialog
+          open
+          onClose={() => setItemRemarksItemId(null)}
+          itemId={itemRemarksItemId}
+          messages={shipmentMessages}
+          onSendMessage={handleItemRemarksSendMessage}
+        />
+      ) : null}
       {loadedOrderId && (
         <CreateRemarkDialog
           open={createRemarkOpen}
