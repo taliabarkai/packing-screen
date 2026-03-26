@@ -37,8 +37,8 @@ export function getPackingStatusChipConfig(status: PackingOrderUiStatus, theme: 
         label: "Ready to Pack",
         Icon: LocalMallOutlinedIcon,
         iconSize: 16,
-        bgcolor: "#a7ffeb",
-        color: "#004d40",
+        bgcolor: "#B9F6CA",
+        color: "#1b5e20",
         border: false,
         borderColor: "transparent",
       } as const;
@@ -47,8 +47,8 @@ export function getPackingStatusChipConfig(status: PackingOrderUiStatus, theme: 
         label: "Packed",
         Icon: TaskAltIcon,
         iconSize: 18,
-        bgcolor: "#e8f5e9",
-        color: "#1b5e20",
+        bgcolor: "#a7ffeb",
+        color: "#004d40",
         border: false,
         borderColor: "transparent",
       } as const;
