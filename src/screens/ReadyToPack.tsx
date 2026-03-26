@@ -39,7 +39,7 @@ import {
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import type { Theme } from "@mui/material/styles";
-import { orange, red } from "@mui/material/colors";
+import { orange, purple, red } from "@mui/material/colors";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -63,6 +63,7 @@ import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlin
 import MergeTypeIcon from "@mui/icons-material/MergeType";
 import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
+import NorthEastIcon from "@mui/icons-material/NorthEast";
 import NumbersIcon from "@mui/icons-material/Numbers";
 import SearchIcon from "@mui/icons-material/Search";
 import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
@@ -514,6 +515,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
 }
 
 type ShipmentMessageChannel = "packing" | "csr";
+type RemarksTabValue = "all" | ShipmentMessageChannel;
 type ShipmentMessageSenderRole = "packer" | "csr";
 
 type ShipmentMessage = {
@@ -526,6 +528,9 @@ type ShipmentMessage = {
   itemId: string | null;
   itemLabel: string;
 };
+
+/** Shipment-level “Apply to” scope and stored `itemLabel` for all-product remarks. */
+const REMARK_ALL_PRODUCTS_LABEL = "All Products";
 
 const REMARK_PRESET_OPTIONS: string[] = [
   "Done",
@@ -541,14 +546,14 @@ const REMARK_PRESET_OPTIONS: string[] = [
   "Shipping method changed - approved by CSR",
   "Shipped Reorder",
   "Shipped Refund",
-  "sent back to supplier the original item",
+  "Sent back to supplier the original item",
   "Sent only chain [requested by CSR]",
   "Sent only Stones [requested by CSR]",
-  "request address confirmation",
-  "address confirmed",
-  "address not confirmed",
-  "arrived from FIX",
-  "RESHIPED",
+  "Request address confirmation",
+  "Address confirmed",
+  "Address not confirmed",
+  "Arrived from FIX",
+  "Reshipped",
   "Sent to fix the returned item",
 ];
 
@@ -570,11 +575,12 @@ const PACK_LINE_ITEM_META: { id: string; title: string; itemListLabel: string }[
   },
 ];
 
-function formatShipmentMessageDisplayTime(iso: string): string {
+/** Remarks list timestamps (reference: 12/12/2026, 3:23 AM). */
+function formatRemarkRowDisplayTime(iso: string): string {
   const d = new Date(iso);
-  return d.toLocaleString("en-GB", {
-    day: "numeric",
+  return d.toLocaleString("en-US", {
     month: "numeric",
+    day: "numeric",
     year: "numeric",
     hour: "numeric",
     minute: "2-digit",
@@ -584,8 +590,14 @@ function formatShipmentMessageDisplayTime(iso: string): string {
 
 /** Product name only in remark chips (strips leading "1 — ", "2 - ", etc.). */
 function remarkItemChipLabel(itemLabel: string): string {
-  if (itemLabel === "Shipment-wide") return itemLabel;
+  if (itemLabel === REMARK_ALL_PRODUCTS_LABEL) return itemLabel;
   return itemLabel.replace(/^\d+\s*[—–\-]\s*/u, "").trim();
+}
+
+/** Product line in remarks (middle dot → hyphen to match reference copy). */
+function remarkProductDisplayLine(itemLabel: string): string {
+  if (itemLabel === REMARK_ALL_PRODUCTS_LABEL) return itemLabel;
+  return remarkItemChipLabel(itemLabel).replace(/\s*·\s*/g, " - ");
 }
 
 function buildInitialShipmentMessages(): ShipmentMessage[] {
@@ -639,7 +651,7 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
       channel: "csr",
       body: "Customer called — please double-check chain length before seal.",
       itemId: null,
-      itemLabel: "Shipment-wide",
+      itemLabel: REMARK_ALL_PRODUCTS_LABEL,
     },
   ];
 }
@@ -671,10 +683,10 @@ function findCarrierLogoSrc(route: ShippingRouteRow): string | null {
     src,
     key: path.split("/").pop()?.toLowerCase() ?? "",
   }));
-  const byCarrier = files.find(({ key }) => key.startsWith(`ship-${carrierSlug}.`));
-  if (byCarrier) return byCarrier.src;
   const byRoute = files.find(({ key }) => key.startsWith(`ship-${routeSlug}.`));
   if (byRoute) return byRoute.src;
+  const byCarrier = files.find(({ key }) => key.startsWith(`ship-${carrierSlug}.`));
+  if (byCarrier) return byCarrier.src;
   return null;
 }
 
@@ -702,10 +714,11 @@ function ShippingRouteColumnLabels({ route }: { route: ShippingRouteRow }) {
               alt={route.carrier}
               sx={{ height: 20, width: "auto", maxWidth: 88, objectFit: "contain", display: "block" }}
             />
-          ) : null}
-          <Typography variant="body1" color="text.primary" letterSpacing="0.15px">
-            {route.carrier}
-          </Typography>
+          ) : (
+            <Typography variant="body1" color="text.primary" letterSpacing="0.15px">
+              {route.carrier}
+            </Typography>
+          )}
         </Stack>
       </Box>
       <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
@@ -777,7 +790,7 @@ function addressFormsEqual(a: AddressForm, b: AddressForm): boolean {
 }
 
 function formatDestinationSummary(form: AddressForm) {
-  return `${form.city}, ${form.state}, ${form.country}`;
+  return `${form.state}, ${form.country}`;
 }
 
 function UpdateAddressDialog({
@@ -1905,7 +1918,7 @@ function CreateRemarkDialog({
   const targetKey = defaultItemId ?? applyScope;
 
   const applyToLabel = (key: string) => {
-    if (key === "shipment") return "Shipment-wide";
+    if (key === "shipment") return REMARK_ALL_PRODUCTS_LABEL;
     const meta = PACK_LINE_ITEM_META.find((x) => x.id === key);
     return meta?.itemListLabel ?? key;
   };
@@ -1952,7 +1965,7 @@ function CreateRemarkDialog({
         }}
       >
         <Typography variant="subtitle1" fontWeight={500} color="text.primary" component="span" sx={{ letterSpacing: "0.15px" }}>
-          Remarks
+          Packing Remarks
         </Typography>
         <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
           <CloseIcon />
@@ -1972,6 +1985,32 @@ function CreateRemarkDialog({
         }}
       >
         <Stack spacing={3} sx={{ flex: "1 1 auto", minHeight: 0 }}>
+          {defaultItemId ? (
+            <Typography variant="body2" color="text.secondary">
+              Applies to: {applyToLabel(defaultItemId)}
+            </Typography>
+          ) : (
+            <FormControl fullWidth>
+              <InputLabel id="create-remark-scope-label" shrink>
+                Apply to
+              </InputLabel>
+              <Select
+                labelId="create-remark-scope-label"
+                id="create-remark-scope"
+                label="Apply to"
+                value={applyScope}
+                onChange={(e: SelectChangeEvent<string>) => setApplyScope(e.target.value)}
+              >
+                <MenuItem value="shipment">{REMARK_ALL_PRODUCTS_LABEL}</MenuItem>
+                {PACK_LINE_ITEM_META.map((item) => (
+                  <MenuItem key={item.id} value={item.id}>
+                    {item.itemListLabel}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+
           <FormControl fullWidth>
             <InputLabel id="create-remark-preset-label" shrink>
               Select Remark
@@ -2005,35 +2044,9 @@ function CreateRemarkDialog({
             </Select>
           </FormControl>
 
-          {defaultItemId ? (
-            <Typography variant="body2" color="text.secondary">
-              Applies to: {applyToLabel(defaultItemId)}
-            </Typography>
-          ) : (
-            <FormControl fullWidth>
-              <InputLabel id="create-remark-scope-label" shrink>
-                Apply to
-              </InputLabel>
-              <Select
-                labelId="create-remark-scope-label"
-                id="create-remark-scope"
-                label="Apply to"
-                value={applyScope}
-                onChange={(e: SelectChangeEvent<string>) => setApplyScope(e.target.value)}
-              >
-                <MenuItem value="shipment">Shipment-wide</MenuItem>
-                {PACK_LINE_ITEM_META.map((item) => (
-                  <MenuItem key={item.id} value={item.id}>
-                    {item.itemListLabel}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-
           <Stack spacing={1.5} sx={{ flex: "1 1 auto", minHeight: 0, display: "flex", flexDirection: "column" }}>
             <Typography variant="body1" color="text.primary" sx={{ letterSpacing: "0.15px", flexShrink: 0 }}>
-              Optional Message:
+              Message (optional):
             </Typography>
             <TextField
               multiline
@@ -2276,7 +2289,7 @@ export default function ReadyToPack() {
   const [sendToFixDialogOpen, setSendToFixDialogOpen] = useState(false);
   const [joinShipmentDialogOpen, setJoinShipmentDialogOpen] = useState(false);
   const [shipmentMessages, setShipmentMessages] = useState<ShipmentMessage[]>(() => buildInitialShipmentMessages());
-  const [remarksTab, setRemarksTab] = useState<ShipmentMessageChannel>("packing");
+  const [remarksTab, setRemarksTab] = useState<RemarksTabValue>("all");
   const [createRemarkOpen, setCreateRemarkOpen] = useState(false);
   const [createRemarkDefaultItemId, setCreateRemarkDefaultItemId] = useState<string | null>(null);
   const [moreActionsMenuAnchor, setMoreActionsMenuAnchor] = useState<null | HTMLElement>(null);
@@ -2299,8 +2312,13 @@ export default function ReadyToPack() {
 
   const filteredRemarksMessages = useMemo(() => {
     return shipmentMessages
-      .filter((m) => m.channel === remarksTab)
-      .sort((a, b) => new Date(b.at).getTime() - new Date(a.at).getTime());
+      .filter((m) => remarksTab === "all" || m.channel === remarksTab)
+      .sort((a, b) => {
+        const tb = new Date(b.at).getTime();
+        const ta = new Date(a.at).getTime();
+        if (tb !== ta) return tb - ta;
+        return b.id.localeCompare(a.id);
+      });
   }, [shipmentMessages, remarksTab]);
 
   const remarkCountByItemId = useMemo(() => {
@@ -2352,7 +2370,7 @@ export default function ReadyToPack() {
     setSendToFixDialogOpen(false);
     setJoinShipmentDialogOpen(false);
     setShipmentMessages(buildInitialShipmentMessages());
-    setRemarksTab("packing");
+    setRemarksTab("all");
     setCreateRemarkOpen(false);
     setCreateRemarkDefaultItemId(null);
     setMoreActionsMenuAnchor(null);
@@ -2375,7 +2393,7 @@ export default function ReadyToPack() {
     const now = new Date().toISOString();
     const itemLabel =
       targetKey === "shipment"
-        ? "Shipment-wide"
+        ? REMARK_ALL_PRODUCTS_LABEL
         : (PACK_LINE_ITEM_META.find((x) => x.id === targetKey)?.itemListLabel ?? "Item");
     const messageBodyText = body.trim() ? `${remarkPreset}\n\n${body.trim()}` : remarkPreset;
     setShipmentMessages((prev) => [
@@ -2385,7 +2403,7 @@ export default function ReadyToPack() {
             ? crypto.randomUUID()
             : `msg-${Date.now()}`,
         at: now,
-        author: "You (packer)",
+        author: "You",
         senderRole: "packer",
         channel: "packing",
         body: messageBodyText,
@@ -2705,7 +2723,14 @@ export default function ReadyToPack() {
               >
                 <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
                   <FieldBlock label="Shipment ID">
-                    <DetailValue>SH-12345</DetailValue>
+                    <Stack direction="row" alignItems="center" spacing={1}>
+                      <DetailValue>SH-12345</DetailValue>
+                      {shipmentDetailsEditUnlocked ? (
+                        <Tooltip title="Merukazim">
+                          <NorthEastIcon sx={{ color: "text.secondary", fontSize: 20, flexShrink: 0 }} />
+                        </Tooltip>
+                      ) : null}
+                    </Stack>
                   </FieldBlock>
                 </Box>
                 <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
@@ -2800,8 +2825,9 @@ export default function ReadyToPack() {
                             alt={activeRoute.carrier}
                             sx={{ height: 20, width: "auto", maxWidth: 96, objectFit: "contain", display: "block" }}
                           />
-                        ) : null}
-                        <DetailValue>{formatCarrierRouteDisplay(activeRoute)}</DetailValue>
+                        ) : (
+                          <DetailValue>{formatCarrierRouteDisplay(activeRoute)}</DetailValue>
+                        )}
                       </Stack>
                       <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
                         <ShipmentFieldActionLink onClick={() => setCarrierRouteDialogOpen(true)}>
@@ -3036,7 +3062,7 @@ export default function ReadyToPack() {
                   direction="row"
                   alignItems="center"
                   justifyContent="flex-start"
-                  sx={{ width: "100%", textAlign: "left" }}
+                  sx={{ width: "100%", textAlign: "left", p: "8px", boxSizing: "border-box" }}
                 >
                   <FormControlLabel
                     control={
@@ -3315,7 +3341,7 @@ export default function ReadyToPack() {
               </Stack>
               <Tabs
                 value={remarksTab}
-                onChange={(_, v: ShipmentMessageChannel) => setRemarksTab(v)}
+                onChange={(_, v: RemarksTabValue) => setRemarksTab(v)}
                 sx={{
                   minHeight: 40,
                   mb: 2,
@@ -3324,6 +3350,7 @@ export default function ReadyToPack() {
                   "& .MuiTab-root": { textTransform: "none", fontWeight: 500, minHeight: 40 },
                 }}
               >
+                <Tab label="All" value="all" />
                 <Tab label="Packing" value="packing" />
                 <Tab label="CSR" value="csr" />
               </Tabs>
@@ -3378,7 +3405,10 @@ export default function ReadyToPack() {
                       />
                     }
                     sx={{
-                      py: 2,
+                      minHeight: 56,
+                      height: 56,
+                      py: 0,
+                      boxSizing: "border-box",
                       fontSize: 18,
                       fontWeight: 500,
                       letterSpacing: "0.46px",
@@ -3406,7 +3436,10 @@ export default function ReadyToPack() {
                         startIcon={<HandymanOutlinedIcon />}
                         onClick={() => setSendToFixDialogOpen(true)}
                         sx={{
-                          py: 2,
+                          minHeight: 56,
+                          height: 56,
+                          py: 0,
+                          boxSizing: "border-box",
                           fontSize: 18,
                           fontWeight: 500,
                           letterSpacing: "0.46px",
@@ -3429,7 +3462,10 @@ export default function ReadyToPack() {
                       endIcon={<ExpandMoreIcon />}
                       onClick={(e) => setMoreActionsMenuAnchor(e.currentTarget)}
                       sx={{
-                        py: 2,
+                        minHeight: 56,
+                        height: 56,
+                        py: 0,
+                        boxSizing: "border-box",
                         fontSize: 18,
                         fontWeight: 500,
                         letterSpacing: "0.46px",
@@ -3726,7 +3762,10 @@ function ItemBlock({
 }
 
 function MessageRow({ message }: { message: ShipmentMessage }) {
-  const time = formatShipmentMessageDisplayTime(message.at);
+  const time = formatRemarkRowDisplayTime(message.at);
+  const productSecondaryLine =
+    message.itemLabel === REMARK_ALL_PRODUCTS_LABEL ? null : `Item: ${remarkProductDisplayLine(message.itemLabel)}`;
+
   return (
     <Box
       sx={{
@@ -3740,34 +3779,66 @@ function MessageRow({ message }: { message: ShipmentMessage }) {
         "&:last-child": { borderBottom: "none" },
       }}
     >
-      <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" sx={{ gap: 0.5, mb: 1 }}>
-        <Chip
-          size="small"
-          label={remarkItemChipLabel(message.itemLabel)}
-          variant="outlined"
-          sx={{
-            maxWidth: "100%",
-            height: "auto",
-            py: 0.5,
-            "& .MuiChip-label": { whiteSpace: "normal", lineHeight: 1.3 },
-          }}
-        />
-        {message.senderRole === "csr" ? <Chip size="small" label="CSR" color="primary" variant="outlined" /> : null}
-      </Stack>
       <Stack
         direction="row"
-        alignItems="flex-start"
+        alignItems="center"
         justifyContent="space-between"
-        spacing={2}
+        spacing={1.5}
         sx={{ mb: 1, width: "100%", minWidth: 0 }}
       >
-        <Typography variant="body2" color="text.primary" fontWeight={600} sx={{ minWidth: 0 }}>
-          {message.author}
-        </Typography>
-        <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, textAlign: "right" }}>
+        <Stack direction="row" alignItems="center" spacing={1} flexWrap="wrap" sx={{ minWidth: 0, gap: 0.75 }}>
+          <Typography variant="body2" color="text.primary" fontWeight={600} sx={{ minWidth: 0 }}>
+            {message.author}
+          </Typography>
+          {message.senderRole === "csr" ? (
+            <Chip
+              size="small"
+              label="CSR"
+              variant="filled"
+              sx={{
+                height: 22,
+                bgcolor: purple[50],
+                color: purple[900],
+                fontWeight: 500,
+                border: "none",
+                "& .MuiChip-label": { px: 1, fontSize: 12 },
+              }}
+            />
+          ) : null}
+          {message.senderRole === "packer" ? (
+            <Chip
+              size="small"
+              label="Packers"
+              variant="filled"
+              sx={{
+                height: 22,
+                bgcolor: "#e3f2fd",
+                color: "#1565c0",
+                fontWeight: 500,
+                border: "none",
+                "& .MuiChip-label": { px: 1, fontSize: 12 },
+              }}
+            />
+          ) : null}
+        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ flexShrink: 0, textAlign: "right", lineHeight: 1.3 }}>
           {time}
         </Typography>
       </Stack>
+      {productSecondaryLine ? (
+        <Typography
+          variant="body2"
+          color="text.secondary"
+          sx={{
+            mb: 1,
+            fontSize: 13,
+            lineHeight: 1.43,
+            letterSpacing: "0.15px",
+          }}
+        >
+          {productSecondaryLine}
+        </Typography>
+      ) : null}
       <Typography variant="body2" color="text.primary" sx={{ width: "100%", wordBreak: "break-word", overflowWrap: "anywhere" }}>
         {message.body}
       </Typography>
