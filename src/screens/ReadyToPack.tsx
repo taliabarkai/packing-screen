@@ -768,6 +768,9 @@ const SHIPPING_ROUTE_ROWS: ShippingRouteRow[] = [
 
 const INITIAL_CARRIER_ROUTE_ID = "fedex-express";
 
+/** Header “Hungary” factory demo: carrier route shown in shipment details. */
+const PROTOTYPE_HUNGARY_CARRIER_ROUTE_ID = "ups-standard";
+
 /** Logos in `public/carriers/` (e.g. `ship-fedex.svg`). */
 function toSlug(v: string) {
   return v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
@@ -2999,11 +3002,13 @@ export default function ReadyToPack() {
     setPrototypeFactorySiteView((v) => {
       if (v === "kiryatGat") {
         setOtherFacilitiesSectionExpanded(false);
+        setActiveCarrierRouteId(PROTOTYPE_HUNGARY_CARRIER_ROUTE_ID);
         return "hungary";
       }
       if (packingOrderUiStatus === "onHold") {
         setOtherFacilitiesSectionExpanded(true);
       }
+      setActiveCarrierRouteId(INITIAL_CARRIER_ROUTE_ID);
       return "kiryatGat";
     });
   };
@@ -4977,7 +4982,7 @@ export default function ReadyToPack() {
                           }}
                         >
                           <ListItemIcon sx={{ minWidth: 36 }}>
-                            <Icon sx={{ fontSize: 20, color: "text.primary" }} />
+                            <Icon sx={{ fontSize: 20, color: "action.active" }} />
                           </ListItemIcon>
                           {label}
                         </MenuItem>
