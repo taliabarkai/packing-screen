@@ -444,8 +444,13 @@ function getNextPrototypeCycleOrderId(current: string | null): string {
   return order[(i + 1) % order.length];
 }
 
+/** Allows demo searches like `# fallback-supervisor` in the bar. */
+function stripLeadingHashSearchPrefix(raw: string): string {
+  return raw.trim().replace(/^#+\s*/, "").trim();
+}
+
 function normalizeOrderIdForLoad(raw: string): string {
-  const t = raw.trim();
+  const t = stripLeadingHashSearchPrefix(raw);
   const lower = t.toLowerCase();
   if (lower === PROTOTYPE_PACK_ORDER_ID) return PROTOTYPE_PACK_ORDER_ID;
   if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "fix") return PROTOTYPE_PENDING_ORDER_ID;
@@ -3443,6 +3448,8 @@ export default function ReadyToPack() {
   const [fallbackPackSubmitPhase, setFallbackPackSubmitPhase] = useState<"idle" | "loading" | "failed">("idle");
   const [fallbackPackDialogOpen, setFallbackPackDialogOpen] = useState(false);
   const fallbackPackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  /** Synchronous intent for `fallback-supervisor` loads — the `loadedOrderId` effect must not rely on batched `orderInput` (stale closure). */
+  const prototypeFallbackSupervisorLoadRef = useRef(false);
   const [packSuccessAnimNonce, setPackSuccessAnimNonce] = useState(0);
   const [sentToFixReason, setSentToFixReason] = useState<string | null>(null);
   /** After OK/Cancel, hide the pending notice until `loadedOrderId` changes again. */
@@ -3720,6 +3727,15 @@ export default function ReadyToPack() {
       setPackingOrderUiStatus("readyToPack");
       setSentToFixReason(null);
     }
+    if (
+      loadedOrderId !== null &&
+      isPrototypeFallbackOrderId(loadedOrderId) &&
+      prototypeFallbackSupervisorLoadRef.current
+    ) {
+      setPackingOrderUiStatus("packApiFailed");
+      setFallbackPackSubmitPhase("failed");
+      setItemsReviewed(true);
+    }
     setShipmentDetailsEditUnlocked(false);
     setTrackingManualMode(false);
     setManualTrackingInput("");
@@ -3753,7 +3769,11 @@ export default function ReadyToPack() {
       setManualTrackingInput(PROTOTYPE_MANUAL_PACK_TRACKING_DEMO);
     }
     setPrototypeFactorySiteView("kiryatGat");
-    setPrototypeAccountRole("packer");
+    const useSupervisorForFallbackDemo =
+      loadedOrderId !== null &&
+      isPrototypeFallbackOrderId(loadedOrderId) &&
+      prototypeFallbackSupervisorLoadRef.current;
+    setPrototypeAccountRole(useSupervisorForFallbackDemo ? "supervisor" : "packer");
     const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
     if (isOnHoldProto) {
       setRemoteFacilityItemIds([...PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS]);
@@ -3903,25 +3923,26 @@ export default function ReadyToPack() {
     const trimmed = raw.trim();
     setOrderInput(trimmed);
     const id = normalizeOrderIdForLoad(trimmed);
+    const queryKey = stripLeadingHashSearchPrefix(trimmed).toLowerCase();
     if (!id) {
+      prototypeFallbackSupervisorLoadRef.current = false;
       setLoadedOrderId(null);
       setNotFoundQuery(null);
       setOrderBrowseStack([]);
       return;
     }
     if (isZeroOnlyShipmentQuery(id)) {
+      prototypeFallbackSupervisorLoadRef.current = false;
       setLoadedOrderId(null);
       setNotFoundQuery(id);
       setOrderBrowseStack([]);
       return;
     }
+    prototypeFallbackSupervisorLoadRef.current =
+      id === PROTOTYPE_FALLBACK_ORDER_ID &&
+      (queryKey === PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH || queryKey === "fallback_supervisor");
     setNotFoundQuery(null);
     setOrderBrowseStack([]);
-    const lowerRaw = trimmed.toLowerCase();
-    if (lowerRaw === PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH || lowerRaw === "fallback_supervisor") {
-      setPrototypeAccountRole("supervisor");
-      setPrototypeFactorySiteView("kiryatGat");
-    }
     setLoadedOrderId(id);
     if (id === PROTOTYPE_SPLIT_ORDER_ID) {
       setSplitLinkedPair(null);
@@ -3935,6 +3956,7 @@ export default function ReadyToPack() {
 
   const handleNextOrder = () => {
     setNotFoundQuery(null);
+    prototypeFallbackSupervisorLoadRef.current = false;
     if (loadedOrderId) {
       setOrderBrowseStack((s) => [...s, loadedOrderId]);
     }
@@ -3945,6 +3967,7 @@ export default function ReadyToPack() {
 
   const handlePreviousOrder = () => {
     if (orderBrowseStack.length === 0) return;
+    prototypeFallbackSupervisorLoadRef.current = false;
     const prev = orderBrowseStack[orderBrowseStack.length - 1];
     setOrderBrowseStack((s) => s.slice(0, -1));
     setOrderInput(prev);
@@ -3966,6 +3989,7 @@ export default function ReadyToPack() {
     if (orderBrowseStack.length > 0) {
       handlePreviousOrder();
     } else {
+      prototypeFallbackSupervisorLoadRef.current = false;
       setLoadedOrderId(null);
       setOrderInput("");
       setNotFoundQuery(null);
@@ -4005,7 +4029,7 @@ export default function ReadyToPack() {
         sx={{
           ...elevationSx,
           bgcolor: "background.paper",
-          height: 90,
+          minHeight: 72,
           zIndex: 2,
           justifyContent: "center",
         }}
@@ -4014,7 +4038,9 @@ export default function ReadyToPack() {
           disableGutters
           sx={{
             px: 3,
-            minHeight: 64,
+            minHeight: 56,
+            py: 0.5,
+            boxSizing: "border-box",
             alignItems: "center",
             justifyContent: "space-between",
             position: "relative",
@@ -4041,8 +4067,9 @@ export default function ReadyToPack() {
               border: "1px solid",
               borderColor: "divider",
               borderRadius: 1,
-              pr: 2,
-              py: 0.5,
+              pr: 1.5,
+              py: 0,
+              minHeight: 48,
               bgcolor: "background.paper",
               width: 600,
               boxSizing: "border-box",
@@ -4065,7 +4092,7 @@ export default function ReadyToPack() {
                   disableUnderline: true,
                   startAdornment: (
                     <InputAdornment position="start" sx={{ mr: 0 }}>
-                      <NumbersIcon sx={{ fontSize: 24, color: "text.secondary", mr: 0.5 }} />
+                      <NumbersIcon sx={{ fontSize: 20, color: "text.secondary", mr: 0.5 }} />
                     </InputAdornment>
                   ),
                   endAdornment: (
@@ -4095,12 +4122,12 @@ export default function ReadyToPack() {
                       </Tooltip>
                     </InputAdornment>
                   ),
-                  sx: { px: 2, py: 1, width: "100%", minWidth: 450 },
+                  sx: { px: 1.5, py: 0, width: "100%", minWidth: 450, alignItems: "center" },
                 }}
                 sx={{
                   flex: 1,
                   minWidth: 0,
-                  "& .MuiInputBase-input": { py: 0.5 },
+                  "& .MuiInputBase-input": { py: 0.5, fontSize: 15 },
                   "& .MuiInputBase-input::placeholder": {
                     opacity: 1,
                     color: "action.disabled",
@@ -4290,7 +4317,8 @@ export default function ReadyToPack() {
             maxWidth: "100%",
             alignSelf: "stretch",
             boxSizing: "border-box",
-            p: 3,
+            px: 3,
+            py: 2,
             borderRadius: 1,
             ...elevationSx,
           }}
@@ -4614,7 +4642,8 @@ export default function ReadyToPack() {
             sx={{
               minWidth: 0,
               width: "100%",
-              p: 3,
+              px: 3,
+              py: 2,
               boxSizing: "border-box",
               borderRadius: 1,
               ...elevationSx,
@@ -5082,7 +5111,8 @@ export default function ReadyToPack() {
                 sx={{
                   minWidth: 0,
                   width: "100%",
-                  p: 3,
+                  px: 3,
+                  py: 2,
                   boxSizing: "border-box",
                   borderRadius: 1,
                   ...elevationSx,
@@ -5336,7 +5366,8 @@ export default function ReadyToPack() {
               elevation={1}
               sx={{
                 gridArea: "status",
-                p: 3,
+                px: 3,
+                py: 2,
                 borderRadius: 1,
                 ...elevationSx,
                 minWidth: 0,
@@ -5693,7 +5724,8 @@ export default function ReadyToPack() {
               elevation={1}
               sx={{
                 gridArea: "remarks",
-                p: 3,
+                px: 3,
+                py: 2,
                 borderRadius: 1,
                 ...elevationSx,
                 position: "relative",
@@ -5783,7 +5815,8 @@ export default function ReadyToPack() {
                 elevation={1}
                 sx={{
                   gridArea: "pack",
-                  p: 3,
+                  px: 3,
+                  py: 2,
                   borderRadius: 1,
                   ...elevationSx,
                   minWidth: 0,
@@ -6093,6 +6126,7 @@ export default function ReadyToPack() {
           currentShipmentId={joinDialogShipmentId}
           onConfirm={(nextCurrentItems, nextNewItems, newShipmentId, sourceShipmentId) => {
             skipPackItemsResetAfterSplitConfirmRef.current = true;
+            prototypeFallbackSupervisorLoadRef.current = false;
             const originalRows = nextCurrentItems.map((x) => ({ ...x, movable: false }));
             const newRows = nextNewItems.map((x) => ({ ...x, movable: false }));
             setPackItems(originalRows);

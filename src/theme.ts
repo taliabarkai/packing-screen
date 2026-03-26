@@ -10,7 +10,7 @@ export const theme = createTheme({
   },
   typography: {
     fontFamily: '"Roboto", "Helvetica", "Arial", sans-serif',
-    h6: { fontWeight: 500, fontSize: 20, lineHeight: 1.6, letterSpacing: "0.15px" },
+    h6: { fontWeight: 500, fontSize: 18, lineHeight: 1.6, letterSpacing: "0.15px" },
   },
   shape: { borderRadius: 8 },
   components: {
