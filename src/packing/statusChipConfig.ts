@@ -7,7 +7,14 @@ import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import { orange } from "@mui/material/colors";
 
 /** Packing screen shipment status (Figma Statuses / node 1159:2644 variants). */
-export type PackingOrderUiStatus = "readyToPack" | "packed" | "cancelled" | "pending" | "onHold";
+export type PackingOrderUiStatus =
+  | "readyToPack"
+  | "packed"
+  | "cancelled"
+  | "pending"
+  | "onHold"
+  /** After Pack API failure (Figma fallback flow / 1762:35805) — chip matches Pending styling. */
+  | "packApiFailed";
 
 export const PACKING_ORDER_UI_STATUSES: PackingOrderUiStatus[] = [
   "readyToPack",
@@ -15,6 +22,7 @@ export const PACKING_ORDER_UI_STATUSES: PackingOrderUiStatus[] = [
   "cancelled",
   "pending",
   "onHold",
+  "packApiFailed",
 ];
 
 export function isPackingStatusBlockingActions(status: PackingOrderUiStatus): boolean {
@@ -71,6 +79,16 @@ export function getPackingStatusChipConfig(status: PackingOrderUiStatus, theme: 
         iconSize: 18,
         bgcolor: "#f3e5f5",
         color: "#4a148c",
+        border: false,
+        borderColor: "transparent",
+      } as const;
+    case "packApiFailed":
+      return {
+        label: "Pending",
+        Icon: PendingOutlinedIcon,
+        iconSize: 20,
+        bgcolor: orange[50],
+        color: w,
         border: false,
         borderColor: "transparent",
       } as const;

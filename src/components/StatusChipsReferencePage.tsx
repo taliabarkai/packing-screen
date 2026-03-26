@@ -41,6 +41,7 @@ const STATUS_LABELS: Record<PackingOrderUiStatus, string> = {
   cancelled: "Cancelled",
   pending: "Pending (sent to fix)",
   onHold: "On hold",
+  packApiFailed: "Pack API failed (fallback prototype)",
 };
 
 export function StatusChipsReferencePage() {

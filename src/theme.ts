@@ -16,6 +16,10 @@ export const theme = createTheme({
   components: {
     MuiButton: {
       styleOverrides: {
+        root: {
+          textTransform: "none",
+          letterSpacing: "normal",
+        },
         containedPrimary: {
           borderRadius: "50px",
         },
