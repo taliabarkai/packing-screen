@@ -270,6 +270,9 @@ const SIMILAR_ORDER_TABS: SimilarOrderTab[] = [
   },
 ];
 
+/** `SIMILAR_ORDER_TABS` index for the shipment currently being packed (default selected tab). */
+const SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX = 0;
+
 /** Shown in pending alert + shipment pending modal “reason for fix” (prototype). */
 const PROTOTYPE_PENDING_SENT_TO_FIX_BODY = "Chain was broken and one charm was missing";
 /** Status card detail under “Order status details” for cancelled (Figma 1544:6488). */
@@ -2924,7 +2927,7 @@ export default function ReadyToPack() {
   /** After OK/Cancel, hide the pending notice until `loadedOrderId` changes again. */
   const [pendingShipmentDialogDismissed, setPendingShipmentDialogDismissed] = useState(false);
   /** Prototype similar orders: which tab is active (Figma 2314:30804). */
-  const [similarOrdersTabIndex, setSimilarOrdersTabIndex] = useState(0);
+  const [similarOrdersTabIndex, setSimilarOrdersTabIndex] = useState(SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX);
   /** On-hold only: item IDs at another facility until Kiriyat Gat marks received (Figma 1744:42531). */
   const [remoteFacilityItemIds, setRemoteFacilityItemIds] = useState<string[]>([]);
   /** Line items marked received from another facility — rendered at bottom in this order, not in fixed meta slots. */
@@ -3099,7 +3102,7 @@ export default function ReadyToPack() {
     setItemRemarksItemId(null);
     setMoreActionsMenuAnchor(null);
     setOnHoldStatusMenuAnchor(null);
-    setSimilarOrdersTabIndex(0);
+    setSimilarOrdersTabIndex(SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX);
     setPrototypeFactorySiteView("kiryatGat");
     const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
     if (isOnHoldProto) {
@@ -3763,49 +3766,89 @@ export default function ReadyToPack() {
             <Stack
               direction="row"
               alignItems="center"
-              justifyContent="flex-start"
+              justifyContent="space-between"
               flexWrap="wrap"
               useFlexGap
               spacing={2}
-              sx={{ mb: 0 }}
+              sx={{ mb: 0, width: "100%", minWidth: 0 }}
             >
               <Typography variant="h6" sx={{ color: "primary.dark", flexShrink: 0 }}>
                 Items to Pack ({packItemCountUi})
               </Typography>
               {isSimilarOrdersView ? (
-                <Tabs
-                  value={similarShipmentTabIndex}
-                  onChange={(_, v: number) => setSimilarOrdersTabIndex(v)}
-                  variant="scrollable"
-                  scrollButtons="auto"
-                  allowScrollButtonsMobile
-                  aria-label="Similar shipments"
+                <Stack
+                  direction="row"
+                  alignItems="center"
+                  spacing={1.5}
                   sx={{
-                    flex: "0 1 auto",
-                    minHeight: 40,
+                    flexShrink: 0,
                     minWidth: 0,
                     maxWidth: "100%",
-                    borderBottom: 1,
-                    borderColor: "divider",
-                    "& .MuiTab-root": {
-                      textTransform: "none",
-                      fontWeight: 500,
+                    justifyContent: { xs: "flex-end", sm: "flex-start" },
+                    flex: { xs: "1 1 100%", sm: "0 0 auto" },
+                  }}
+                >
+                  <Typography
+                    component="span"
+                    variant="body1"
+                    sx={{
+                      color: "text.primary",
+                      fontWeight: 600,
                       fontSize: 15,
                       letterSpacing: "0.15px",
-                      minHeight: 40,
-                      py: 0.75,
-                      color: "text.secondary",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    Shipment:
+                  </Typography>
+                  <Tabs
+                  value={similarShipmentTabIndex}
+                  onChange={(_, v: number) => setSimilarOrdersTabIndex(v)}
+                  aria-label="Similar shipments"
+                  textColor="inherit"
+                  TabIndicatorProps={{ sx: { display: "none" } }}
+                  sx={{
+                    flex: "0 1 auto",
+                    minWidth: 0,
+                    maxWidth: "100%",
+                    minHeight: "unset",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    borderRadius: 100,
+                    bgcolor: "background.paper",
+                    p: 0.5,
+                    boxSizing: "border-box",
+                    "& .MuiTabs-flexContainer": {
+                      gap: 0.5,
+                    },
+                    "& .MuiTab-root": {
+                      textTransform: "none",
+                      fontWeight: 600,
+                      fontSize: 15,
+                      letterSpacing: "0.15px",
+                      minHeight: 36,
+                      py: 0.875,
+                      px: 2,
+                      minWidth: "unset",
                       maxWidth: "none",
-                      "&&.Mui-selected": {
-                        color: "primary.main",
+                      borderRadius: 100,
+                      color: "text.secondary",
+                      bgcolor: "transparent",
+                      transition: (t) =>
+                        t.transitions.create(["background-color", "color"], {
+                          duration: t.transitions.duration.short,
+                        }),
+                      "&.Mui-selected": {
+                        color: "#1976D2",
                         fontWeight: 600,
+                        bgcolor: "#E3F2FD",
+                      },
+                      "&:not(.Mui-selected):hover": {
+                        bgcolor: alpha(theme.palette.common.black, 0.04),
                       },
                     },
                     "& .MuiTabs-indicator": {
-                      top: "auto",
-                      bottom: 0,
-                      height: 3,
-                      borderRadius: "3px 3px 0 0",
+                      display: "none",
                     },
                   }}
                 >
@@ -3813,19 +3856,6 @@ export default function ReadyToPack() {
                     <Tab key={t.key} id={`similar-order-tab-${i}`} label={t.shipmentId} value={i} />
                   ))}
                 </Tabs>
-              ) : null}
-              {isSimilarOrdersView ? (
-                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ ml: { xs: 0, md: "auto" } }}>
-                  <MergeTypeIcon sx={{ fontSize: 16, color: "primary.dark" }} />
-                  <Link
-                    component="button"
-                    type="button"
-                    underline="hover"
-                    onClick={() => setJoinShipmentDialogOpen(true)}
-                    sx={{ color: "primary.dark", fontSize: 16, fontWeight: 400, flexShrink: 0 }}
-                  >
-                    Join Shipments
-                  </Link>
                 </Stack>
               ) : null}
             </Stack>
@@ -4636,7 +4666,7 @@ export default function ReadyToPack() {
                       icon={<InfoOutlinedIcon />}
                       sx={{
                         alignItems: "center",
-                        py: 1.5,
+                        py: 0.75,
                         px: 2,
                         borderRadius: 1,
                         border: "none",
@@ -4646,16 +4676,48 @@ export default function ReadyToPack() {
                         "& .MuiAlert-icon": {
                           color: lightBlue[900],
                           alignSelf: "center",
+                          mr: 1.5,
+                          py: 0.25,
+                          opacity: 1,
                         },
                         "& .MuiAlert-message": {
                           width: "100%",
+                          pt: 1,
+                          pb: 1,
                           color: lightBlue[900],
                           display: "flex",
                           alignItems: "center",
+                          minWidth: 0,
                         },
                       }}
                     >
-                      <AlertTitle sx={{ mb: 0 }}>This shipment has a similar order.</AlertTitle>
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        justifyContent="space-between"
+                        spacing={2}
+                        sx={{ width: "100%", minWidth: 0 }}
+                      >
+                        <AlertTitle
+                          sx={{ mb: 0, mt: 0, flex: "1 1 auto", minWidth: 0, pr: 1, lineHeight: 1.43 }}
+                        >
+                          Similar order found.
+                        </AlertTitle>
+                        <Link
+                          component="button"
+                          type="button"
+                          underline="hover"
+                          onClick={() => setJoinShipmentDialogOpen(true)}
+                          sx={{
+                            color: "primary.dark",
+                            fontSize: 16,
+                            fontWeight: 400,
+                            flexShrink: 0,
+                          }}
+                        >
+                          Join Shipment
+                        </Link>
+                      </Stack>
                     </Alert>
                   </>
                 ) : null}
