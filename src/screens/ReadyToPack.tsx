@@ -1827,6 +1827,7 @@ function JoinShipmentDialog({
                 }}
               >
                 <Stack spacing={2.5} sx={{ width: "100%", maxWidth: 360, alignItems: "center" }}>
+                  <Inventory2OutlinedIcon sx={{ fontSize: 32, color: "action.disabled" }} />
                   <Typography
                     variant="body1"
                     color="text.secondary"
@@ -2293,7 +2294,7 @@ function SplitShipmentDialog({
                   spacing={1.5}
                   sx={{ px: 3, py: 6 }}
                 >
-                  <Inventory2OutlinedIcon sx={{ fontSize: 56, color: "action.disabled" }} />
+                  <Inventory2OutlinedIcon sx={{ fontSize: 32, color: "action.disabled" }} />
                   <Typography variant="body1" color="text.secondary" sx={{ letterSpacing: "0.15px" }}>
                     Ready for Items
                   </Typography>
@@ -5339,11 +5340,6 @@ function ItemBlock({
     itemId !== premiumGiftKitItemId &&
     !remoteFacilityTitleRow;
 
-  const remarksAfterTitle =
-    shouldShowHoldAssign ||
-    remoteFacilityTitleRow ||
-    (Boolean(showHoldAssignDefault) && itemId === premiumGiftKitItemId);
-
   const titleRowAlignCenter =
     shouldShowHoldAssign || remoteFacilityTitleRow || (Boolean(showHoldAssignDefault) && itemId === premiumGiftKitItemId);
 
@@ -5365,7 +5361,7 @@ function ItemBlock({
               alignSelf: "flex-start",
               mt: -0.25,
               bgcolor: "background.paper",
-              boxShadow: 1,
+              boxShadow: "none",
               "&:hover": { bgcolor: "grey.100" },
             }}
           >
@@ -5424,32 +5420,42 @@ function ItemBlock({
             pr: shouldShowHoldAssign || remoteFacilityTitleRow ? 0 : 1,
           }}
         >
-          <Typography
-            variant="body1"
-            color="text.primary"
+          <Box
             sx={{
-              flex: "0 1 auto",
+              display: "flex",
+              flexDirection: "row",
+              flexWrap: "wrap",
+              alignItems: titleRowAlignCenter ? "center" : "flex-start",
+              columnGap: "16px",
+              rowGap: 0.5,
               minWidth: 0,
               maxWidth: "100%",
-              width: "fit-content",
-              display: "block",
-              wordBreak: "break-word",
             }}
           >
-            {title}
-          </Typography>
-          {remoteFacilityTitleRow ? (
-            remarksControl
-          ) : shouldShowHoldAssign ? (
-            <>
-              {titleRowEnd != null ? <Box sx={{ flexShrink: 0 }}>{titleRowEnd}</Box> : null}
-              {remarksControl}
-            </>
-          ) : showHoldAssignDefault && itemId === premiumGiftKitItemId ? (
-            <>{remarksControl}</>
-          ) : (
-            <>{titleRowEnd != null ? <Box sx={{ flexShrink: 0 }}>{titleRowEnd}</Box> : null}</>
-          )}
+            <Typography
+              variant="body1"
+              color="text.primary"
+              sx={{
+                flex: "0 1 auto",
+                minWidth: 0,
+                maxWidth: "100%",
+                width: "fit-content",
+                display: "block",
+                wordBreak: "break-word",
+              }}
+            >
+              {title}
+            </Typography>
+            {remarksControl}
+          </Box>
+          {!remoteFacilityTitleRow && shouldShowHoldAssign && titleRowEnd != null ? (
+            <Box sx={{ flexShrink: 0 }}>{titleRowEnd}</Box>
+          ) : !remoteFacilityTitleRow &&
+            !shouldShowHoldAssign &&
+            !(showHoldAssignDefault && itemId === premiumGiftKitItemId) &&
+            titleRowEnd != null ? (
+            <Box sx={{ flexShrink: 0 }}>{titleRowEnd}</Box>
+          ) : null}
         </Box>
         {remoteFacilityTitleRow && titleRowEnd != null ? (
           <Box
@@ -5481,9 +5487,6 @@ function ItemBlock({
               />
             ) : null}
           </Box>
-        ) : null}
-        {!remarksAfterTitle && remarksControl ? (
-          <Box sx={{ flexShrink: 0, ml: "auto", alignSelf: "flex-start" }}>{remarksControl}</Box>
         ) : null}
       </Box>
       <Stack
