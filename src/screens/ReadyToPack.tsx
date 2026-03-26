@@ -50,7 +50,6 @@ import {
   Typography,
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
-import type { Theme } from "@mui/material/styles";
 import { lightBlue, orange, pink, purple, red } from "@mui/material/colors";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
@@ -61,7 +60,6 @@ import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CloseIcon from "@mui/icons-material/Close";
-import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import PendingOutlinedIcon from "@mui/icons-material/PendingOutlined";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
@@ -71,7 +69,6 @@ import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ListAltIcon from "@mui/icons-material/ListAlt";
-import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
 import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlined";
 import MergeTypeIcon from "@mui/icons-material/MergeType";
 import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
@@ -82,12 +79,16 @@ import SearchIcon from "@mui/icons-material/Search";
 import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SyncIcon from "@mui/icons-material/Sync";
-import TaskAltIcon from "@mui/icons-material/TaskAlt";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 
 import { loadNewSplitShipmentIdFromApi } from "../api/loadNewSplitShipmentId";
 import { loadTrackingNumberFromApi } from "../api/loadTrackingNumber";
+import {
+  getPackingStatusChipConfig,
+  isPackingStatusBlockingActions,
+  type PackingOrderUiStatus,
+} from "../packing/statusChipConfig";
 import oakAndLunaLogo from "../assets/oakandluna.svg";
 import tenenGroupLogo from "../assets/tenengroup.svg";
 import product1Img from "../assets/products/product-1.png";
@@ -165,69 +166,6 @@ const JOIN_CURRENT_SEED: JoinTransferItem[] = [
 
 function joinLayoutKey(source: JoinTransferItem[], current: JoinTransferItem[]) {
   return `${source.map((i) => i.id).join(",")}|${current.map((i) => i.id).join(",")}`;
-}
-
-/** Packing screen shipment status (Figma Statuses / node 1159:2644 variants). */
-type PackingOrderUiStatus = "readyToPack" | "packed" | "cancelled" | "pending" | "onHold";
-
-function isPackingStatusBlockingActions(status: PackingOrderUiStatus) {
-  return status === "pending" || status === "cancelled" || status === "onHold";
-}
-
-function getPackingStatusChipConfig(status: PackingOrderUiStatus, theme: Theme) {
-  const w = theme.palette.warning.main;
-  switch (status) {
-    case "readyToPack":
-      return {
-        label: "Ready to Pack",
-        Icon: LocalMallOutlinedIcon,
-        iconSize: 16,
-        bgcolor: "#a7ffeb",
-        color: "#004d40",
-        border: false,
-        borderColor: "transparent",
-      } as const;
-    case "packed":
-      return {
-        label: "Packed",
-        Icon: TaskAltIcon,
-        iconSize: 18,
-        bgcolor: "#e8f5e9",
-        color: "#1b5e20",
-        border: false,
-        borderColor: "transparent",
-      } as const;
-    case "cancelled":
-      return {
-        label: "Cancelled",
-        Icon: CancelOutlinedIcon,
-        iconSize: 18,
-        bgcolor: "#ffebee",
-        color: "#b71c1c",
-        border: false,
-        borderColor: "transparent",
-      } as const;
-    case "pending":
-      return {
-        label: "Pending",
-        Icon: PendingOutlinedIcon,
-        iconSize: 20,
-        bgcolor: orange[50],
-        color: w,
-        border: false,
-        borderColor: "transparent",
-      } as const;
-    case "onHold":
-      return {
-        label: "On Hold",
-        Icon: PauseCircleOutlineIcon,
-        iconSize: 18,
-        bgcolor: "#f3e5f5",
-        color: "#4a148c",
-        border: true,
-        borderColor: "#feebee",
-      } as const;
-  }
 }
 
 const elevationSx = {
@@ -3432,7 +3370,13 @@ export default function ReadyToPack() {
 
           <Stack direction="row" alignItems="center" spacing={3} sx={{ flex: 1, justifyContent: "flex-end" }}>
             <Tooltip title="Go to Order Manager">
-              <IconButton size="medium" aria-label="Go to Order Manager">
+              <IconButton
+                size="medium"
+                aria-label="Go to Order Manager"
+                onClick={() => {
+                  window.location.hash = "#/components/status-chips";
+                }}
+              >
                 <AssignmentOutlinedIcon />
               </IconButton>
             </Tooltip>
@@ -4566,7 +4510,6 @@ export default function ReadyToPack() {
                         ? {
                             "&.MuiChip-clickable:hover": {
                               bgcolor: purple[100],
-                              borderColor: packingStatusChip.borderColor,
                             },
                             "&.MuiChip-clickable:focus": {
                               bgcolor: purple[100],
