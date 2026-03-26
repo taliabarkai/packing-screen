@@ -82,6 +82,7 @@ import SyncIcon from "@mui/icons-material/Sync";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 
+import { LinkedShipmentTabs, type LinkedShipmentTabItem } from "../components/LinkedShipmentTabs";
 import { loadNewSplitShipmentIdFromApi } from "../api/loadNewSplitShipmentId";
 import { loadTrackingNumberFromApi } from "../api/loadTrackingNumber";
 import {
@@ -128,10 +129,13 @@ type JoinTransferItem = {
   movable: boolean;
 };
 
+/** Shared line copy for Product-4 asset (split secondary tab + join source column). */
+const PRODUCT_4_LINE_TITLE = "Serena Bow Initial Necklace with Birthstone in Gold Vermiel";
+
 const JOIN_SOURCE_SEED: JoinTransferItem[] = [
   {
     id: "join-ext-1",
-    title: "Serena Name Huggies with Diamonds in Sterling Silver",
+    title: PRODUCT_4_LINE_TITLE,
     image: product4Img,
     movable: true,
   },
@@ -189,8 +193,18 @@ const PROTOTYPE_CANCELLED_ORDER_ID = "cancelled";
 const PROTOTYPE_ON_HOLD_ORDER_ID = "hold";
 /** Prototype: similar orders (same address) — search `similar`; tabs to switch orders (Figma 2314:30804). */
 const PROTOTYPE_SIMILAR_ORDERS_ORDER_ID = "similar";
+/** Prototype: linked split shipments — search `split` or finish Split Shipment dialog; tabs for original + new. */
+const PROTOTYPE_SPLIT_ORDER_ID = "split";
 
-type SimilarOrderTab = { key: string; shipmentId: string; orderNumber: string; tabLabel: string };
+type SimilarOrderTab = {
+  key: string;
+  shipmentId: string;
+  orderNumber: string;
+  tabLabel: string;
+  factoryLabel: string;
+};
+
+type SplitOrderTabRow = LinkedShipmentTabItem & { orderNumber: string };
 
 /** Two prototype orders sharing the same destination (join via More actions). */
 const SIMILAR_ORDER_TABS: SimilarOrderTab[] = [
@@ -199,14 +213,48 @@ const SIMILAR_ORDER_TABS: SimilarOrderTab[] = [
     shipmentId: "SH-12345",
     orderNumber: "5847219",
     tabLabel: "Order 5847219",
+    factoryLabel: "KG",
   },
   {
     key: "similar-b",
     shipmentId: "SH-92834",
     orderNumber: "5847220",
     tabLabel: "Order 5847220",
+    factoryLabel: "KG",
   },
 ];
+
+/** Default linked shipments when opening the split prototype via search `split`. */
+const SPLIT_ORDER_PROTOTYPE_TABS: SplitOrderTabRow[] = [
+  {
+    key: "split-proto-a",
+    shipmentId: "SH-12345",
+    factoryLabel: "KG",
+    orderNumber: "5847219",
+  },
+  {
+    key: "split-proto-b",
+    shipmentId: "SH-92834",
+    factoryLabel: "KG",
+    orderNumber: "5847220",
+  },
+];
+
+/** Secondary tab (SH-92834) in default `split` search: single line matching product-4 / join seed item. */
+const SPLIT_PROTOTYPE_SECOND_TAB_ITEM: JoinTransferItem = {
+  id: "split-proto-product-4",
+  title: PRODUCT_4_LINE_TITLE,
+  image: product4Img,
+  movable: false,
+};
+
+/** Second similar-order tab (SH-92834): only the differing line vs tab 0. */
+const SIMILAR_ORDER_SECOND_TAB_ITEM: JoinTransferItem = {
+  id: "similar-order-product-4",
+  title: PRODUCT_4_LINE_TITLE,
+  image: product4Img,
+  movable: false,
+};
 
 /** `SIMILAR_ORDER_TABS` index for the shipment currently being packed (default selected tab). */
 const SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX = 0;
@@ -218,13 +266,14 @@ const PROTOTYPE_CANCELLED_STATUS_BODY =
   "This shipment was cancelled. Do not pack or ship. Contact CSR if you need more information.";
 /** On-hold status banner under Status row (Figma 2052:23611). */
 const ON_HOLD_AWAITING_ITEM_BODY = "This shipment is awaiting 1 item from Nazareth.";
-/** Next Order (prototype): sort → hold → pack → pending → similar → packed → cancelled → (loops to sort). */
+/** Next Order (prototype): sort → hold → pack → pending → similar → split → packed → cancelled → (loops to sort). */
 const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_SORT_STATION_ORDER_ID,
   PROTOTYPE_ON_HOLD_ORDER_ID,
   PROTOTYPE_PACK_ORDER_ID,
   PROTOTYPE_PENDING_ORDER_ID,
   PROTOTYPE_SIMILAR_ORDERS_ORDER_ID,
+  PROTOTYPE_SPLIT_ORDER_ID,
   PROTOTYPE_PACKED_ORDER_ID,
   PROTOTYPE_CANCELLED_ORDER_ID,
 ] as const;
@@ -249,6 +298,10 @@ function isPrototypeSimilarOrdersId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
 }
 
+function isPrototypeSplitOrdersId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_SPLIT_ORDER_ID;
+}
+
 function isPrototypePackedOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_PACKED_ORDER_ID;
 }
@@ -271,7 +324,23 @@ function normalizeOrderIdForLoad(raw: string): string {
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
   if (lower === PROTOTYPE_ON_HOLD_ORDER_ID) return PROTOTYPE_ON_HOLD_ORDER_ID;
   if (lower === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID) return PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
+  if (lower === PROTOTYPE_SPLIT_ORDER_ID) return PROTOTYPE_SPLIT_ORDER_ID;
   return t;
+}
+
+function normalizeSplitNewShipmentIdForTab(id: string | null): string {
+  if (id == null || !String(id).trim()) return "SH-92834";
+  const t = String(id).trim();
+  if (t.startsWith("SH-")) return t;
+  if (/^\d+$/.test(t)) return `SH-${t}`;
+  return t;
+}
+
+function prototypeSplitOriginalShipmentIdForTabs(currentShipmentId: string): string {
+  const t = currentShipmentId.trim();
+  if (!t || t === PROTOTYPE_PACK_ORDER_ID || t === PROTOTYPE_SORT_STATION_ORDER_ID) return "SH-12345";
+  if (t.startsWith("SH-")) return t;
+  return "SH-12345";
 }
 
 function isZeroOnlyShipmentQuery(id: string): boolean {
@@ -599,11 +668,14 @@ function buildSplitShipmentCurrentItems(): JoinTransferItem[] {
   }));
 }
 
-/** When leaving on-hold, append any line items that were still at another facility (not yet in `packItems`). */
-function mergeMissingPackLineItems(prev: JoinTransferItem[]): JoinTransferItem[] {
+/**
+ * Append catalog lines missing from `packItems` (e.g. after leaving on-hold).
+ * `excludeIds`: line ids that must stay out of the main list (still at another facility).
+ */
+function mergeMissingPackLineItems(prev: JoinTransferItem[], excludeIds: ReadonlySet<string> = new Set()): JoinTransferItem[] {
   const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
   const have = new Set(prev.map((p) => p.id));
-  const missing = base.filter((b) => !have.has(b.id));
+  const missing = base.filter((b) => !have.has(b.id) && !excludeIds.has(b.id));
   return missing.length ? [...prev, ...missing] : prev;
 }
 
@@ -623,8 +695,22 @@ const HUNGARY_DEMO_OTHER_FACILITY_LINE_IDS: readonly string[] = ["pack-item-2"];
 /** Simulated barcode → container row after “scan” (Figma 2345:27263 / Location3). */
 const PROTOTYPE_CONTAINER_ASSIGN_CODE = "C.Y BOX 2606.KG";
 const PROTOTYPE_CONTAINER_ASSIGN_LOCATION = "שלייפ כניסה";
+/** Second prototype bin for on-hold line 2 (line 1 uses `PROTOTYPE_CONTAINER_ASSIGN_CODE`). */
+const PROTOTYPE_CONTAINER_ASSIGN_CODE_ON_HOLD_LINE_2 = "C.Y BOX 2712.KG";
+const PROTOTYPE_CONTAINER_ASSIGN_LOCATION_LINE_2 = "אזור איסוף";
 
 type PrototypeContainerAssignDetail = { code: string; location: string };
+
+/** On-hold prototype: lines that use the container control arrive already assigned (user may release with ✕). */
+function buildOnHoldDefaultContainerAssignByItemId(): Record<string, PrototypeContainerAssignDetail> {
+  return {
+    "pack-item-1": { code: PROTOTYPE_CONTAINER_ASSIGN_CODE, location: PROTOTYPE_CONTAINER_ASSIGN_LOCATION },
+    "pack-item-2": {
+      code: PROTOTYPE_CONTAINER_ASSIGN_CODE_ON_HOLD_LINE_2,
+      location: PROTOTYPE_CONTAINER_ASSIGN_LOCATION_LINE_2,
+    },
+  };
+}
 
 /** Remarks list timestamps (reference: 12/12/2026, 3:23 AM). */
 function formatRemarkRowDisplayTime(iso: string): string {
@@ -1980,7 +2066,12 @@ function SplitShipmentDialog({
   open: boolean;
   onClose: () => void;
   currentShipmentId: string;
-  onConfirm?: (nextCurrentItems: JoinTransferItem[]) => void;
+  onConfirm?: (
+    nextCurrentItems: JoinTransferItem[],
+    nextNewItems: JoinTransferItem[],
+    newShipmentId: string | null,
+    sourceShipmentId: string,
+  ) => void;
 }) {
   const [currentItems, setCurrentItems] = useState<JoinTransferItem[]>([]);
   const [newItems, setNewItems] = useState<JoinTransferItem[]>([]);
@@ -2041,7 +2132,7 @@ function SplitShipmentDialog({
 
   const handleConfirm = () => {
     /* prototype: wire split API when available */
-    onConfirm?.(currentItems);
+    onConfirm?.(currentItems, newItems, newShipmentId, currentShipmentId);
     onClose();
   };
 
@@ -2831,6 +2922,8 @@ export default function ReadyToPack() {
   const theme = useTheme();
   const [orderInput, setOrderInput] = useState("");
   const [loadedOrderId, setLoadedOrderId] = useState<string | null>(null);
+  /** After Split Shipment confirm, skip resetting `packItems` in the `loadedOrderId` effect (items already applied). */
+  const skipPackItemsResetAfterSplitConfirmRef = useRef(false);
   /** Prototype: stack of order ids before opening pending (`fix`) via Next — Back restores the last one. */
   const [orderBrowseStack, setOrderBrowseStack] = useState<string[]>([]);
   const [notFoundQuery, setNotFoundQuery] = useState<string | null>(null);
@@ -2866,6 +2959,15 @@ export default function ReadyToPack() {
   const [pendingShipmentDialogDismissed, setPendingShipmentDialogDismissed] = useState(false);
   /** Prototype similar orders: which tab is active (Figma 2314:30804). */
   const [similarOrdersTabIndex, setSimilarOrdersTabIndex] = useState(SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX);
+  /** Prototype split orders: which linked shipment tab is active (original vs new). */
+  const [splitOrdersTabIndex, setSplitOrdersTabIndex] = useState(0);
+  /** After Split Shipment dialog confirm: concrete original + new shipment ids for tabs; search `split` uses prototype rows. */
+  const [splitLinkedPair, setSplitLinkedPair] = useState<{ original: string; split: string } | null>(null);
+  /** Per-tab line items after a completed split dialog; null for search-only `split` prototype. */
+  const [splitTabInventories, setSplitTabInventories] = useState<{
+    original: JoinTransferItem[];
+    newShipment: JoinTransferItem[];
+  } | null>(null);
   /** On-hold only: item IDs at another facility until Kiriyat Gat marks received (Figma 1744:42531). */
   const [remoteFacilityItemIds, setRemoteFacilityItemIds] = useState<string[]>([]);
   /** Line items marked received from another facility — rendered at bottom in this order, not in fixed meta slots. */
@@ -2882,22 +2984,92 @@ export default function ReadyToPack() {
   const isPackActionsBlocked = isPackingStatusBlockingActions(packingOrderUiStatus);
   const isSortingStationView = isSortingStationOrderId(loadedOrderId);
   const isSimilarOrdersView = isPrototypeSimilarOrdersId(loadedOrderId);
+  const isSplitOrdersView = isPrototypeSplitOrdersId(loadedOrderId);
+  /** On-hold + sorting: per-line container row (sorting = “Scan to Assign” until scanned; on-hold skips gift kit). */
+  const showItemContainerAssignRow = packingOrderUiStatus === "onHold" || isSortingStationView;
+
+  const splitOrderTabsResolved = useMemo((): SplitOrderTabRow[] => {
+    if (!isSplitOrdersView) return [];
+    const factory = prototypeFactorySiteView === "hungary" ? "HU" : "KG";
+    if (splitLinkedPair) {
+      return [
+        {
+          key: "split-linked-original",
+          shipmentId: splitLinkedPair.original,
+          factoryLabel: factory,
+          orderNumber: "5847219",
+        },
+        {
+          key: "split-linked-new",
+          shipmentId: splitLinkedPair.split,
+          factoryLabel: factory,
+          orderNumber: "5847220",
+        },
+      ];
+    }
+    return SPLIT_ORDER_PROTOTYPE_TABS.map((r) => ({
+      ...r,
+      factoryLabel: factory,
+    }));
+  }, [isSplitOrdersView, splitLinkedPair, prototypeFactorySiteView]);
+
   const similarShipmentTabIndex = Math.min(
     similarOrdersTabIndex,
     SIMILAR_ORDER_TABS.length - 1,
+  );
+  const splitShipmentTabIndex = Math.min(
+    splitOrdersTabIndex,
+    Math.max(0, splitOrderTabsResolved.length - 1),
   );
   const similarOrderDetailIndex = isSimilarOrdersView ? similarShipmentTabIndex : 0;
   const activeSimilarOrder =
     isSimilarOrdersView && SIMILAR_ORDER_TABS[similarOrderDetailIndex]
       ? SIMILAR_ORDER_TABS[similarOrderDetailIndex]
       : SIMILAR_ORDER_TABS[0];
-  const displayedShipmentId = isSimilarOrdersView ? activeSimilarOrder.shipmentId : "SH-12345";
+  const activeSplitOrder =
+    isSplitOrdersView && splitOrderTabsResolved[splitShipmentTabIndex]
+      ? splitOrderTabsResolved[splitShipmentTabIndex]
+      : null;
+
+  const displayedShipmentId = isSimilarOrdersView
+    ? activeSimilarOrder.shipmentId
+    : isSplitOrdersView && activeSplitOrder
+      ? activeSplitOrder.shipmentId
+      : "SH-12345";
   const displayedOrderNumberForDetails =
-    isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.orderNumber : loadedOrderId;
+    isSimilarOrdersView && loadedOrderId
+      ? activeSimilarOrder.orderNumber
+      : isSplitOrdersView && loadedOrderId && activeSplitOrder
+        ? activeSplitOrder.orderNumber
+        : loadedOrderId;
   const joinDialogShipmentId =
-    isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.shipmentId : loadedOrderId ?? "";
-  const packItemCount = packItems.length;
-  const visiblePackItemIds = useMemo(() => new Set(packItems.map((i) => i.id)), [packItems]);
+    isSimilarOrdersView && loadedOrderId
+      ? activeSimilarOrder.shipmentId
+      : isSplitOrdersView && loadedOrderId && activeSplitOrder
+        ? activeSplitOrder.shipmentId
+        : loadedOrderId ?? "";
+
+  /** Similar orders: tab 0 full list, tab 1 only the differing product. Split: dialog inventories or default prototype second tab. */
+  const packItemsResolved = useMemo(() => {
+    if (isSimilarOrdersView && similarShipmentTabIndex === 1) {
+      return [SIMILAR_ORDER_SECOND_TAB_ITEM];
+    }
+    if (isSplitOrdersView && !splitTabInventories && splitShipmentTabIndex === 1) {
+      return [SPLIT_PROTOTYPE_SECOND_TAB_ITEM];
+    }
+    if (!isSplitOrdersView || !splitTabInventories) return packItems;
+    return splitShipmentTabIndex === 0 ? splitTabInventories.original : splitTabInventories.newShipment;
+  }, [
+    isSimilarOrdersView,
+    similarShipmentTabIndex,
+    isSplitOrdersView,
+    splitTabInventories,
+    splitShipmentTabIndex,
+    packItems,
+  ]);
+
+  const packItemCount = packItemsResolved.length;
+  const visiblePackItemIds = useMemo(() => new Set(packItemsResolved.map((i) => i.id)), [packItemsResolved]);
   const showPackLine = (lineId: string) =>
     visiblePackItemIds.has(lineId) && !remoteReceivedPackOrder.includes(lineId);
   const showPackLine0 = showPackLine(PACK_LINE_ITEM_META[0].id);
@@ -2908,13 +3080,14 @@ export default function ReadyToPack() {
     [remoteReceivedPackOrder, visiblePackItemIds],
   );
   const extraPackItems = useMemo(
-    () => packItems.filter((i) => !PACK_LINE_ITEM_META.some((meta) => meta.id === i.id)),
-    [packItems],
+    () => packItemsResolved.filter((i) => !PACK_LINE_ITEM_META.some((meta) => meta.id === i.id)),
+    [packItemsResolved],
   );
 
   const hungaryFactoryDemoActive =
     prototypeFactorySiteView === "hungary" &&
     !isSimilarOrdersView &&
+    !isSplitOrdersView &&
     !isSortingStationView &&
     packingOrderUiStatus !== "onHold" &&
     packingOrderUiStatus !== "cancelled" &&
@@ -2926,8 +3099,11 @@ export default function ReadyToPack() {
 
   const showOtherFacilitiesSection =
     !isSimilarOrdersView &&
+    !isSplitOrdersView &&
     remoteFacilityIdsForUi.length > 0 &&
-    (packingOrderUiStatus === "onHold" || hungaryFactoryDemoActive);
+    (packingOrderUiStatus === "onHold" ||
+      hungaryFactoryDemoActive ||
+      (packingOrderUiStatus === "readyToPack" && isPrototypeOnHoldOrderId(loadedOrderId)));
 
   const showPackLine0Ui = hungaryFactoryDemoActive
     ? visiblePackItemIds.has(PACK_LINE_ITEM_META[0].id) &&
@@ -2963,8 +3139,13 @@ export default function ReadyToPack() {
   }, [isSimilarOrdersView, similarShipmentTabIndex]);
   const activeRoute = findShippingRoute(activeCarrierRouteId) ?? SHIPPING_ROUTE_ROWS[0];
   const activeCarrierLogoSrc = findCarrierLogoSrc(activeRoute);
+  /** Non-primary tab on split or similar-order pair: preview only — no pack column or reviewed checkbox (tab 0 packs). */
+  const isLinkedOrderNonPrimaryTab =
+    (isSplitOrdersView && splitShipmentTabIndex !== 0) ||
+    (isSimilarOrdersView && similarShipmentTabIndex !== 0);
   /** Hide pack checkbox + pack / send-to-fix / more-actions (sorting station is view-only for pack flow). */
-  const hidePackActionsUi = isPackActionsBlocked || isSortingStationView;
+  const hidePackActionsUi =
+    isPackActionsBlocked || isSortingStationView || isLinkedOrderNonPrimaryTab;
   const packingStatusChip = getPackingStatusChipConfig(packingOrderUiStatus, theme);
   const StatusChipIcon = packingStatusChip.Icon;
   const readyToPackStatusChip = getPackingStatusChipConfig("readyToPack", theme);
@@ -3041,6 +3222,11 @@ export default function ReadyToPack() {
     setMoreActionsMenuAnchor(null);
     setOnHoldStatusMenuAnchor(null);
     setSimilarOrdersTabIndex(SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX);
+    setSplitOrdersTabIndex(0);
+    if (!isPrototypeSplitOrdersId(loadedOrderId)) {
+      setSplitLinkedPair(null);
+      setSplitTabInventories(null);
+    }
     setPrototypeFactorySiteView("kiryatGat");
     const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
     if (isOnHoldProto) {
@@ -3051,9 +3237,17 @@ export default function ReadyToPack() {
     } else {
       setRemoteFacilityItemIds([]);
       setRemoteReceivedPackOrder([]);
-      setPackItems(base);
+      if (skipPackItemsResetAfterSplitConfirmRef.current) {
+        skipPackItemsResetAfterSplitConfirmRef.current = false;
+      } else {
+        setPackItems(base);
+      }
     }
-    setContainerAssignByItemId({});
+    if (isOnHoldProto) {
+      setContainerAssignByItemId(buildOnHoldDefaultContainerAssignByItemId());
+    } else {
+      setContainerAssignByItemId({});
+    }
   }, [loadedOrderId]);
 
   const handleContainerAssignSimulate = (assignItemId: string) => {
@@ -3089,9 +3283,10 @@ export default function ReadyToPack() {
       return;
     }
     setRemoteReceivedPackOrder((prev) => prev.filter((id) => id !== itemId));
-    if (packingOrderUiStatus === "onHold") {
-      const full = buildSplitShipmentCurrentItems().find((i) => i.id === itemId);
-      if (!full) return;
+    const returnToOtherFacilities =
+      packingOrderUiStatus === "onHold" ||
+      (packingOrderUiStatus === "readyToPack" && isPrototypeOnHoldOrderId(loadedOrderId));
+    if (returnToOtherFacilities) {
       setPackItems((prev) => prev.filter((p) => p.id !== itemId));
       setRemoteFacilityItemIds((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
     }
@@ -3194,6 +3389,10 @@ export default function ReadyToPack() {
     setNotFoundQuery(null);
     setOrderBrowseStack([]);
     setLoadedOrderId(id);
+    if (id === PROTOTYPE_SPLIT_ORDER_ID) {
+      setSplitLinkedPair(null);
+      setSplitTabInventories(null);
+    }
   };
 
   const handleNextOrder = () => {
@@ -3719,7 +3918,7 @@ export default function ReadyToPack() {
               <Typography variant="h6" sx={{ color: "primary.dark", flexShrink: 0 }}>
                 Items to Pack ({packItemCountUi})
               </Typography>
-              {isSimilarOrdersView ? (
+              {isSimilarOrdersView || isSplitOrdersView ? (
                 <Stack
                   direction="row"
                   alignItems="center"
@@ -3745,61 +3944,31 @@ export default function ReadyToPack() {
                   >
                     Shipment:
                   </Typography>
-                  <Tabs
-                  value={similarShipmentTabIndex}
-                  onChange={(_, v: number) => setSimilarOrdersTabIndex(v)}
-                  aria-label="Similar shipments"
-                  textColor="inherit"
-                  TabIndicatorProps={{ sx: { display: "none" } }}
-                  sx={{
-                    flex: "0 1 auto",
-                    minWidth: 0,
-                    maxWidth: "100%",
-                    minHeight: "unset",
-                    border: "1px solid",
-                    borderColor: "divider",
-                    borderRadius: 100,
-                    bgcolor: "background.paper",
-                    p: 0.5,
-                    boxSizing: "border-box",
-                    "& .MuiTabs-flexContainer": {
-                      gap: 0.5,
-                    },
-                    "& .MuiTab-root": {
-                      textTransform: "none",
-                      fontWeight: 600,
-                      fontSize: 15,
-                      letterSpacing: "0.15px",
-                      minHeight: 36,
-                      py: 0.875,
-                      px: 2,
-                      minWidth: "unset",
-                      maxWidth: "none",
-                      borderRadius: 100,
-                      color: "text.secondary",
-                      bgcolor: "transparent",
-                      transition: (t) =>
-                        t.transitions.create(["background-color", "color"], {
-                          duration: t.transitions.duration.short,
-                        }),
-                      "&.Mui-selected": {
-                        color: "#1976D2",
-                        fontWeight: 600,
-                        bgcolor: "#E3F2FD",
-                      },
-                      "&:not(.Mui-selected):hover": {
-                        bgcolor: alpha(theme.palette.common.black, 0.04),
-                      },
-                    },
-                    "& .MuiTabs-indicator": {
-                      display: "none",
-                    },
-                  }}
-                >
-                  {SIMILAR_ORDER_TABS.map((t, i) => (
-                    <Tab key={t.key} id={`similar-order-tab-${i}`} label={t.shipmentId} value={i} />
-                  ))}
-                </Tabs>
+                  {isSimilarOrdersView ? (
+                    <LinkedShipmentTabs
+                      tabs={SIMILAR_ORDER_TABS.map((t) => ({
+                        key: t.key,
+                        shipmentId: t.shipmentId,
+                        factoryLabel: t.factoryLabel,
+                      }))}
+                      value={similarShipmentTabIndex}
+                      onChange={setSimilarOrdersTabIndex}
+                      ariaLabel="Similar shipments"
+                      idPrefix="similar-order-tab"
+                    />
+                  ) : (
+                    <LinkedShipmentTabs
+                      tabs={splitOrderTabsResolved.map((t) => ({
+                        key: t.key,
+                        shipmentId: t.shipmentId,
+                        factoryLabel: t.factoryLabel,
+                      }))}
+                      value={splitShipmentTabIndex}
+                      onChange={setSplitOrdersTabIndex}
+                      ariaLabel="Split shipments"
+                      idPrefix="split-order-tab"
+                    />
+                  )}
                 </Stack>
               ) : null}
             </Stack>
@@ -3807,7 +3976,7 @@ export default function ReadyToPack() {
 
             {showPackLine0Ui ? (
               <ItemBlock
-                showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                showHoldAssignDefault={showItemContainerAssignRow}
                 containerAssignByItemId={containerAssignByItemId}
                 onContainerAssignSimulate={handleContainerAssignSimulate}
                 onContainerAssignClear={handleContainerAssignClear}
@@ -3855,7 +4024,7 @@ export default function ReadyToPack() {
               <Fragment>
                 {showPackLine0Ui ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
-                  showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                  showHoldAssignDefault={showItemContainerAssignRow}
                   containerAssignByItemId={containerAssignByItemId}
                   onContainerAssignSimulate={handleContainerAssignSimulate}
                   onContainerAssignClear={handleContainerAssignClear}
@@ -3918,7 +4087,7 @@ export default function ReadyToPack() {
               <Fragment>
                 {(showPackLine0Ui || showPackLine1Ui) ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
-                  showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                  showHoldAssignDefault={showItemContainerAssignRow}
                   containerAssignByItemId={containerAssignByItemId}
                   onContainerAssignSimulate={handleContainerAssignSimulate}
                   onContainerAssignClear={handleContainerAssignClear}
@@ -3957,7 +4126,7 @@ export default function ReadyToPack() {
               <Box key={item.id}>
                 {(anyPrimaryPackLineVisibleUi || extraIdx > 0) ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
-                  showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                  showHoldAssignDefault={showItemContainerAssignRow}
                   containerAssignByItemId={containerAssignByItemId}
                   onContainerAssignSimulate={handleContainerAssignSimulate}
                   onContainerAssignClear={handleContainerAssignClear}
@@ -3969,7 +4138,18 @@ export default function ReadyToPack() {
                   details={
                     <>
                       <SectionOverline>Details</SectionOverline>
-                      <DetailRow label="Source:" value="Joined shipment" />
+                      {item.id === "split-proto-product-4" ||
+                      item.id === "similar-order-product-4" ||
+                      item.id === "join-ext-1" ? (
+                        <>
+                          <DetailRow label="Material:" value="18K Gold Vermeil" />
+                          <DetailRow label="Initial:" value="L" />
+                          <DetailRow label="Birthstone:" value="Clear Crystal" />
+                          <DetailRow label="Chain Length:" value={'18" - 22"'} />
+                        </>
+                      ) : (
+                        <DetailRow label="Source:" value="Joined shipment" />
+                      )}
                     </>
                   }
                   packaging={null}
@@ -3986,7 +4166,7 @@ export default function ReadyToPack() {
                   <Box key={`remote-received-${rid}`}>
                     {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
                     <ItemBlock
-                      showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                      showHoldAssignDefault={showItemContainerAssignRow}
                       remoteFacilityTitleRow={remoteReceivedItemCheckbox != null}
                       containerAssignByItemId={containerAssignByItemId}
                       onContainerAssignSimulate={handleContainerAssignSimulate}
@@ -4037,7 +4217,7 @@ export default function ReadyToPack() {
                   <Box key={`remote-received-${rid}`}>
                     {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
                     <ItemBlock
-                      showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                      showHoldAssignDefault={showItemContainerAssignRow}
                       containerAssignByItemId={containerAssignByItemId}
                       onContainerAssignSimulate={handleContainerAssignSimulate}
                       onContainerAssignClear={handleContainerAssignClear}
@@ -4101,7 +4281,7 @@ export default function ReadyToPack() {
                   <Box key={`remote-received-${rid}`}>
                     {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
                     <ItemBlock
-                      showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                      showHoldAssignDefault={showItemContainerAssignRow}
                       containerAssignByItemId={containerAssignByItemId}
                       onContainerAssignSimulate={handleContainerAssignSimulate}
                       onContainerAssignClear={handleContainerAssignClear}
@@ -4141,7 +4321,8 @@ export default function ReadyToPack() {
 
             {!isSortingStationView &&
             packingOrderUiStatus !== "cancelled" &&
-            packingOrderUiStatus !== "onHold" ? (
+            packingOrderUiStatus !== "onHold" &&
+            !isLinkedOrderNonPrimaryTab ? (
               <>
                 <Divider sx={{ my: 3 }} />
                 <Stack
@@ -4537,8 +4718,12 @@ export default function ReadyToPack() {
                         setPackingOrderUiStatus("readyToPack");
                         setOnHoldStatusMenuAnchor(null);
                         if (isPrototypeOnHoldOrderId(loadedOrderId)) {
-                          setRemoteFacilityItemIds([]);
-                          setPackItems((prev) => mergeMissingPackLineItems(prev));
+                          const stayingRemote = remoteFacilityItemIds.filter((id) =>
+                            PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS.includes(id),
+                          );
+                          setRemoteFacilityItemIds(stayingRemote);
+                          const excludeFromMainPack = new Set(stayingRemote);
+                          setPackItems((prev) => mergeMissingPackLineItems(prev, excludeFromMainPack));
                         }
                       }}
                     >
@@ -4601,8 +4786,6 @@ export default function ReadyToPack() {
                   </Alert>
                 ) : null}
                 {isSimilarOrdersView ? (
-                  <>
-                    <Divider />
                     <Alert
                       severity="info"
                       variant="standard"
@@ -4662,11 +4845,8 @@ export default function ReadyToPack() {
                         </Link>
                       </Stack>
                     </Alert>
-                  </>
                 ) : null}
                 {packingOrderUiStatus === "pending" && sentToFixReason ? (
-                  <>
-                    <Divider />
                     <Alert
                       severity="warning"
                       variant="standard"
@@ -4707,11 +4887,8 @@ export default function ReadyToPack() {
                         {sentToFixReason}
                       </Typography>
                     </Alert>
-                  </>
                 ) : null}
                 {packingOrderUiStatus === "cancelled" ? (
-                  <>
-                    <Divider />
                     <Alert
                       severity="error"
                       variant="standard"
@@ -4752,7 +4929,6 @@ export default function ReadyToPack() {
                         {PROTOTYPE_CANCELLED_STATUS_BODY}
                       </Typography>
                     </Alert>
-                  </>
                 ) : null}
               </Stack>
             </Paper>
@@ -5065,9 +5241,19 @@ export default function ReadyToPack() {
           open={splitShipmentDialogOpen}
           onClose={() => setSplitShipmentDialogOpen(false)}
           currentShipmentId={joinDialogShipmentId}
-          onConfirm={(nextCurrentItems) => {
-            setPackItems(nextCurrentItems.map((x) => ({ ...x, movable: false })));
+          onConfirm={(nextCurrentItems, nextNewItems, newShipmentId, sourceShipmentId) => {
+            skipPackItemsResetAfterSplitConfirmRef.current = true;
+            const originalRows = nextCurrentItems.map((x) => ({ ...x, movable: false }));
+            const newRows = nextNewItems.map((x) => ({ ...x, movable: false }));
+            setPackItems(originalRows);
+            setSplitTabInventories({ original: originalRows, newShipment: newRows });
             setItemsReviewed(false);
+            setSplitLinkedPair({
+              original: prototypeSplitOriginalShipmentIdForTabs(sourceShipmentId),
+              split: normalizeSplitNewShipmentIdForTab(newShipmentId),
+            });
+            setSplitOrdersTabIndex(0);
+            setLoadedOrderId(PROTOTYPE_SPLIT_ORDER_ID);
           }}
         />
       )}
@@ -5135,13 +5321,12 @@ function ItemHoldAssignContainer({
   if (assigned != null) {
     return (
       <Box
-        aria-label={`Container ${assigned.code}. ${assigned.location}.`}
         sx={{
           display: "flex",
           flexDirection: "row",
           alignItems: "stretch",
-          width: "100%",
-          maxWidth: 352,
+          width: "fit-content",
+          maxWidth: "100%",
           minHeight: 40,
           borderRadius: "4px",
           border: "1px solid",
@@ -5154,67 +5339,88 @@ function ItemHoldAssignContainer({
         {labelColumn}
         <Box
           sx={{
-            flex: 1,
+            flex: "0 0 auto",
             minWidth: 0,
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "space-between",
-            pl: 2,
-            pr: 1.5,
+            pr: 1,
             py: 0.5,
-            gap: 0.5,
             boxSizing: "border-box",
           }}
         >
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, maxWidth: "42%" }}>
-            <Inventory2OutlinedIcon sx={{ fontSize: 12, color: "text.primary", flexShrink: 0 }} />
-            <Typography
+          <Tooltip title="Assigned to this container. Use ✕ to release the item." enterDelay={400}>
+            <ButtonBase
+              focusRipple
+              aria-label={`Container ${assigned.code}. ${assigned.location}.`}
+              onClick={(e) => {
+                e.currentTarget.focus();
+              }}
               sx={{
-                fontSize: 12,
-                lineHeight: 1.5,
-                letterSpacing: "0.15px",
-                color: "text.primary",
-                fontWeight: 400,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
+                flex: "0 1 auto",
+                minWidth: 0,
+                maxWidth: "100%",
+                display: "flex",
+                flexDirection: "row",
+                flexWrap: "wrap",
+                alignItems: "center",
+                justifyContent: "flex-start",
+                pl: 2,
+                pr: 0.75,
+                py: 0.5,
+                gap: 0.5,
+                borderRadius: 0,
+                textAlign: "left",
               }}
             >
-              {assigned.code}
-            </Typography>
-          </Stack>
-          <Divider
-            orientation="vertical"
-            flexItem
-            sx={{ height: 18, alignSelf: "center", borderColor: "divider", mx: 0.25 }}
-          />
-          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, maxWidth: "38%" }}>
-            <PushPinOutlinedIcon sx={{ fontSize: 12, color: "text.primary", flexShrink: 0 }} />
-            <Typography
-              sx={{
-                fontSize: 12,
-                lineHeight: 1.5,
-                letterSpacing: "0.15px",
-                color: "text.primary",
-                fontWeight: 500,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-              }}
-              dir="auto"
-            >
-              {assigned.location}
-            </Typography>
-          </Stack>
+              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0, maxWidth: "100%" }}>
+                <Inventory2OutlinedIcon sx={{ fontSize: 12, color: "text.primary", flexShrink: 0 }} />
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    letterSpacing: "0.15px",
+                    color: "text.primary",
+                    fontWeight: 400,
+                    wordBreak: "break-word",
+                    overflowWrap: "anywhere",
+                  }}
+                >
+                  {assigned.code}
+                </Typography>
+              </Stack>
+              <Divider
+                orientation="vertical"
+                flexItem
+                sx={{ height: 18, alignSelf: "center", borderColor: "divider", mx: 0.25 }}
+              />
+              <Stack direction="row" alignItems="center" spacing={0.5} sx={{ minWidth: 0, maxWidth: "100%" }}>
+                <PushPinOutlinedIcon sx={{ fontSize: 12, color: "text.primary", flexShrink: 0 }} />
+                <Typography
+                  sx={{
+                    fontSize: 12,
+                    lineHeight: 1.5,
+                    letterSpacing: "0.15px",
+                    color: "text.primary",
+                    fontWeight: 500,
+                    wordBreak: "break-word",
+                    overflowWrap: "anywhere",
+                  }}
+                  dir="auto"
+                >
+                  {assigned.location}
+                </Typography>
+              </Stack>
+            </ButtonBase>
+          </Tooltip>
           <IconButton
             size="small"
-            aria-label="Clear container assignment"
+            aria-label="Release item from container"
             onClick={(e) => {
               e.stopPropagation();
               onClear();
             }}
-            sx={{ flexShrink: 0, p: 0.5, ml: 0.5 }}
+            sx={{ flexShrink: 0, p: 0.5, ml: 0.25 }}
           >
             <CloseIcon sx={{ fontSize: 16 }} />
           </IconButton>
@@ -5239,8 +5445,8 @@ function ItemHoldAssignContainer({
         display: "flex",
         flexDirection: "row",
         alignItems: "stretch",
-        width: "100%",
-        maxWidth: 352,
+        width: "fit-content",
+        maxWidth: "100%",
         minHeight: 40,
         borderRadius: "4px",
         border: "1px solid",
@@ -5255,8 +5461,7 @@ function ItemHoldAssignContainer({
       {labelColumn}
       <Box
         sx={{
-          flex: 1,
-          minWidth: 0,
+          flex: "0 0 auto",
           pl: 2,
           pr: 1.5,
           display: "flex",
@@ -5272,20 +5477,19 @@ function ItemHoldAssignContainer({
           spacing={1}
           sx={{
             py: 0.75,
-            width: "100%",
             boxSizing: "border-box",
           }}
         >
           <DocumentScannerOutlinedIcon sx={{ fontSize: 20, color: "text.disabled", flexShrink: 0 }} />
           <Typography
+            component="span"
             sx={{
               fontSize: 14,
               lineHeight: "24px",
               letterSpacing: "0.15px",
               color: "text.disabled",
               whiteSpace: "nowrap",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
+              flexShrink: 0,
             }}
           >
             Scan to Assign
@@ -5340,10 +5544,9 @@ function ItemBlock({
     onItemRemarksClick != null &&
     (itemRemarkCount > 0 || itemId !== premiumGiftKitItemId);
 
+  /** Gift packaging lines (e.g. Premium Gift Kit) are never assigned to containers. */
   const shouldShowHoldAssign =
-    Boolean(showHoldAssignDefault) &&
-    itemId !== premiumGiftKitItemId &&
-    !remoteFacilityTitleRow;
+    Boolean(showHoldAssignDefault) && itemId !== premiumGiftKitItemId && !remoteFacilityTitleRow;
 
   const titleRowAlignCenter =
     shouldShowHoldAssign || remoteFacilityTitleRow || (Boolean(showHoldAssignDefault) && itemId === premiumGiftKitItemId);
@@ -5478,9 +5681,8 @@ function ItemBlock({
             sx={{
               flexShrink: 0,
               ml: { xs: 0, sm: "auto" },
-              width: { xs: "100%", sm: "auto" },
-              minWidth: { xs: "100%", sm: 200 },
-              maxWidth: 352,
+              width: "fit-content",
+              maxWidth: "100%",
               alignSelf: "center",
             }}
           >
