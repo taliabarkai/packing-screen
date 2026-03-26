@@ -34,6 +34,7 @@ import {
   InputLabel,
   Link,
   ListItemIcon,
+  ListSubheader,
   Menu,
   MenuItem,
   Paper,
@@ -59,7 +60,9 @@ import CardGiftcardOutlinedIcon from "@mui/icons-material/CardGiftcardOutlined";
 import ChatBubbleOutlineIcon from "@mui/icons-material/ChatBubbleOutline";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
+import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import PendingOutlinedIcon from "@mui/icons-material/PendingOutlined";
 import RadioButtonUncheckedIcon from "@mui/icons-material/RadioButtonUnchecked";
 import DocumentScannerOutlinedIcon from "@mui/icons-material/DocumentScannerOutlined";
@@ -69,6 +72,7 @@ import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
 import ListAltIcon from "@mui/icons-material/ListAlt";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlined";
 import MergeTypeIcon from "@mui/icons-material/MergeType";
 import LockOpenOutlinedIcon from "@mui/icons-material/LockOpenOutlined";
@@ -115,7 +119,7 @@ const MORE_ACTIONS_MENU_ITEMS_PACKED = [
 
 /** Muted outlined dismiss actions in modals (secondary tone; not primary black/blue). */
 const DIALOG_CANCEL_BUTTON_SX = {
-  textTransform: "uppercase" as const,
+  textTransform: "none" as const,
   color: "text.secondary",
   borderColor: "divider",
   "&:hover": {
@@ -124,6 +128,64 @@ const DIALOG_CANCEL_BUTTON_SX = {
     bgcolor: "action.hover",
   },
 };
+
+/** Shared modal header row: padding, title, and close control for every dialog. */
+const STANDARD_DIALOG_TITLE_ROOT_SX = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 1,
+  pt: 2,
+  pb: 2,
+  pl: 3,
+  pr: 0,
+  flexShrink: 0,
+  boxSizing: "border-box",
+} as const;
+
+const STANDARD_DIALOG_TITLE_TEXT_SX = {
+  color: "text.primary",
+  fontWeight: 600,
+  fontSize: 16,
+  lineHeight: 1.5,
+  letterSpacing: "0.15px",
+} as const;
+
+const STANDARD_DIALOG_CLOSE_ICON_SX = {
+  color: "text.secondary",
+  flexShrink: 0,
+  mt: 0,
+  marginRight: "16px",
+} as const;
+
+function StandardDialogTitle({
+  children,
+  onClose,
+  subtitle,
+}: {
+  children: ReactNode;
+  onClose: () => void;
+  subtitle?: ReactNode;
+}) {
+  return (
+    <DialogTitle component="div" sx={STANDARD_DIALOG_TITLE_ROOT_SX}>
+      <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+        <Typography variant="subtitle1" component="h2" sx={STANDARD_DIALOG_TITLE_TEXT_SX}>
+          {children}
+        </Typography>
+        {subtitle ? <Box sx={{ mt: 0.5 }}>{subtitle}</Box> : null}
+      </Box>
+      <IconButton
+        aria-label="Close"
+        onClick={onClose}
+        size="small"
+        sx={STANDARD_DIALOG_CLOSE_ICON_SX}
+      >
+        <CloseIcon />
+      </IconButton>
+    </DialogTitle>
+  );
+}
 
 const IMG = {
   item1: product1Img,
@@ -190,6 +252,19 @@ const elevationSx = {
 };
 
 const ORDER_SEARCH_PLACEHOLDER = "Scan barcode or search by order/shipment ID";
+/** Demo search shortcuts (help menu in search bar); values match `normalizeOrderIdForLoad`. */
+const PROTOTYPE_SEARCH_KEYWORDS = [
+  "pack",
+  "pending",
+  "manual",
+  "fallback",
+  "sort",
+  "hold",
+  "similar",
+  "split",
+  "packed",
+  "cancelled",
+] as const;
 
 /** Prototype: full ready-to-pack UI — search `pack` or Next Order. */
 const PROTOTYPE_PACK_ORDER_ID = "pack";
@@ -199,6 +274,16 @@ const PROTOTYPE_PENDING_ORDER_ID = "pending";
 const PROTOTYPE_MANUAL_PACK_ORDER_ID = "manual";
 /** Prefilled manual tracking value for the manual-pack prototype and after pending acknowledgement (enables Pack CTA). */
 const PROTOTYPE_MANUAL_PACK_TRACKING_DEMO = "DEMO-TRACK-001";
+/** Prototype: Pack → loading → failed carrier API (Figma 1762:35805). Search `fallback`. */
+const PROTOTYPE_FALLBACK_ORDER_ID = "fallback";
+const PROTOTYPE_FALLBACK_PACK_ERROR_TITLE = "API Connection Failed";
+const PROTOTYPE_FALLBACK_PACK_ERROR_DETAIL = "FEDEX_ERROR: Invalid postal code for destination";
+
+/** Prototype header: supervisor (teal avatar + alternate name) vs packer (blue-gray avatar). */
+const PROTOTYPE_PACKER_AVATAR_BG = "#90a4ae";
+const PROTOTYPE_SUPERVISOR_AVATAR_BG = "#00897B";
+const PROTOTYPE_SUPERVISOR_DISPLAY_NAME = "Elena Vasquez";
+const PROTOTYPE_SUPERVISOR_INITIALS = "EV";
 /** Prototype: sorting station — search `sort`; full screen without pack checkbox / pack buttons (API tracks sorting). */
 const PROTOTYPE_SORT_STATION_ORDER_ID = "sort";
 /** Prototype: already packed shipment — search `packed` or Next Order. */
@@ -282,13 +367,14 @@ const PROTOTYPE_CANCELLED_STATUS_BODY =
   "This shipment was cancelled. Do not pack or ship. Contact CSR if you need more information.";
 /** On-hold status banner under Status row (Figma 2052:23611). */
 const ON_HOLD_AWAITING_ITEM_BODY = "This shipment is awaiting 1 item from Nazareth.";
-/** Next Order (prototype): sort → hold → pack → pending → similar → split → packed → cancelled → (loops to sort). */
+/** Next Order (prototype): sort → hold → pack → pending → manual → fallback → similar → split → packed → cancelled → (loops to sort). */
 const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_SORT_STATION_ORDER_ID,
   PROTOTYPE_ON_HOLD_ORDER_ID,
   PROTOTYPE_PACK_ORDER_ID,
   PROTOTYPE_PENDING_ORDER_ID,
   PROTOTYPE_MANUAL_PACK_ORDER_ID,
+  PROTOTYPE_FALLBACK_ORDER_ID,
   PROTOTYPE_SIMILAR_ORDERS_ORDER_ID,
   PROTOTYPE_SPLIT_ORDER_ID,
   PROTOTYPE_PACKED_ORDER_ID,
@@ -301,6 +387,10 @@ function isPrototypePendingOrderId(id: string | null): boolean {
 
 function isPrototypeManualPackOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_MANUAL_PACK_ORDER_ID;
+}
+
+function isPrototypeFallbackOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_FALLBACK_ORDER_ID;
 }
 
 function isSortingStationOrderId(id: string | null): boolean {
@@ -342,6 +432,7 @@ function normalizeOrderIdForLoad(raw: string): string {
   if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "fix") return PROTOTYPE_PENDING_ORDER_ID;
   if (lower === PROTOTYPE_MANUAL_PACK_ORDER_ID || lower === "manualpack" || lower === "manual-pack")
     return PROTOTYPE_MANUAL_PACK_ORDER_ID;
+  if (lower === PROTOTYPE_FALLBACK_ORDER_ID) return PROTOTYPE_FALLBACK_ORDER_ID;
   if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
@@ -365,6 +456,7 @@ function prototypeSplitOriginalShipmentIdForTabs(currentShipmentId: string): str
     !t ||
     t === PROTOTYPE_PACK_ORDER_ID ||
     t === PROTOTYPE_MANUAL_PACK_ORDER_ID ||
+    t === PROTOTYPE_FALLBACK_ORDER_ID ||
     t === PROTOTYPE_SORT_STATION_ORDER_ID
   )
     return "SH-12345";
@@ -1028,22 +1120,7 @@ function UpdateAddressDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pr: 1,
-          pb: 1,
-        }}
-      >
-        <Typography variant="h6" component="span" fontWeight={600} color="text.primary">
-          Update Address Details
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Update Address Details</StandardDialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2.5, pb: 2 }}>
         <Stack spacing={2}>
@@ -1155,7 +1232,6 @@ function UpdateAddressDialog({
             disabled={!isDirty || validated}
             onClick={handleValidate}
             sx={{
-              textTransform: "uppercase",
               ...(!isDirty || validated
                 ? {
                     bgcolor: "grey.400",
@@ -1177,7 +1253,6 @@ function UpdateAddressDialog({
             disabled={!validated}
             onClick={handleSave}
             sx={{
-              textTransform: "uppercase",
               ...(!validated
                 ? {
                     bgcolor: "grey.400",
@@ -1262,28 +1337,16 @@ function OrderHistoryLogDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 2,
-          pr: 1,
-          pb: 1,
-        }}
-      >
-        <Box>
-          <Typography variant="h6" fontWeight={600} color="text.primary">
-            Order History Log
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
+      <StandardDialogTitle
+        onClose={onClose}
+        subtitle={
+          <Typography variant="body2" color="text.secondary">
             Order #{orderNumber}
           </Typography>
-        </Box>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+        }
+      >
+        Order History Log
+      </StandardDialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2.5, pb: 2 }}>
         <Box sx={{ maxHeight: 440, overflow: "auto", pr: 0.5 }}>
@@ -1380,8 +1443,8 @@ function OrderHistoryLogDialog({
       </DialogContent>
       <Divider />
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "flex-end" }}>
-        <Button variant="contained" color="primary" onClick={onClose} sx={{ textTransform: "uppercase" }}>
-          Close log
+        <Button variant="contained" color="primary" onClick={onClose}>
+          Close Log
         </Button>
       </DialogActions>
     </Dialog>
@@ -1435,28 +1498,11 @@ function SendToFixDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 2,
-          pr: 1,
-          pb: 1,
-          pt: 2.5,
-          flexShrink: 0,
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={500} color="text.primary" component="span" sx={{ letterSpacing: "0.15px" }}>
-          Send to fix
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Send to Fix</StandardDialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogContent
         sx={{
+          px: 3,
           pt: 3,
           pb: 1,
           flex: "1 1 auto",
@@ -1497,7 +1543,7 @@ function SendToFixDialog({
         <Button
           variant="outlined"
           onClick={onClose}
-          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, py: 1, px: 2.75 }}
         >
           Cancel
         </Button>
@@ -1506,9 +1552,9 @@ function SendToFixDialog({
           color="primary"
           disabled={!canSubmit}
           onClick={handleSubmit}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ py: 1, px: 2.75 }}
         >
-          Send to fix
+          Send to Fix
         </Button>
       </DialogActions>
     </Dialog>
@@ -1562,37 +1608,7 @@ function ShipmentPendingDialog({
         },
       }}
     >
-      <DialogTitle
-        component="div"
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 1,
-          pt: 2.5,
-          pb: 2,
-          px: 3,
-          pr: 1,
-          flexShrink: 0,
-        }}
-      >
-        <Typography
-          variant="h6"
-          component="h2"
-          sx={{
-            color: "text.primary",
-            fontWeight: 600,
-            fontSize: 20,
-            lineHeight: 1.6,
-            letterSpacing: "0.15px",
-          }}
-        >
-          Shipment Pending
-        </Typography>
-        <IconButton aria-label="Close" size="small" onClick={onCancel} sx={{ color: "text.secondary" }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onCancel}>Shipment Pending</StandardDialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogContent
         sx={{
@@ -1697,7 +1713,7 @@ function ShipmentPendingDialog({
         <Button
           variant="outlined"
           onClick={onCancel}
-          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.5 }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, py: 1, px: 2.5 }}
         >
           Cancel
         </Button>
@@ -1705,10 +1721,462 @@ function ShipmentPendingDialog({
           variant="contained"
           color="primary"
           onClick={onOk}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.5 }}
+          sx={{ py: 1, px: 2.5 }}
         >
-          OK (FIX DONE)
+          OK (Fix Done)
         </Button>
+      </DialogActions>
+    </Dialog>
+  );
+}
+
+/** Figma 1778:10342 — Fallback Pack dialog prototype field values. */
+const FALLBACK_PACK_PROTOTYPE = {
+  facilityId: "IL-TLV",
+  securityCode: "IL-123",
+  facilityAddress: "Amindav 3, Tel Aviv 1234958 Israel",
+  customerName: "Claytin Click",
+  street: "123 Main Street",
+  city: "Port Washington",
+  zip: "11050",
+  country: "United States",
+  email: "ClaytinClick@gmail.com",
+  phone: "1-(516)-123-6954",
+  productName: "Compass Necklace in 18K Gold Plating",
+  sku: "123-9482-3894",
+  quantity: "1",
+  unitValue: "$27 USD",
+  weight: "360g",
+  taxingMode: "DDP",
+  iossNumber: "N/A",
+  taxComplianceUnitValue: "$27 USD",
+} as const;
+
+function FallbackPackCopyField({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  const copy = () => {
+    void navigator.clipboard?.writeText(value).catch(() => {});
+  };
+  return (
+    <TextField
+      label={label}
+      value={value}
+      fullWidth
+      size="medium"
+      variant="outlined"
+      InputProps={{
+        readOnly: true,
+        sx: { pr: 0.5 },
+        endAdornment: (
+          <InputAdornment position="end">
+            <Tooltip title="Copy">
+              <IconButton aria-label={`Copy ${label}`} edge="end" size="small" onClick={copy}>
+                <ContentCopyIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </Tooltip>
+          </InputAdornment>
+        ),
+      }}
+    />
+  );
+}
+
+function FallbackPackStepDot({
+  stepNum,
+  active,
+  completed,
+}: {
+  stepNum: number;
+  active: boolean;
+  completed?: boolean;
+}) {
+  const filled = Boolean(completed || active);
+  return (
+    <Box
+      sx={{
+        width: 24,
+        height: 24,
+        borderRadius: "50%",
+        bgcolor: filled ? "primary.main" : "#9e9e9e",
+        color: "#fff",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: 12,
+        lineHeight: 1.66,
+        letterSpacing: "0.4px",
+        border: "2px solid",
+        borderColor: "background.paper",
+        boxSizing: "border-box",
+        flexShrink: 0,
+      }}
+    >
+      {completed ? <CheckIcon sx={{ fontSize: 15 }} /> : stepNum}
+    </Box>
+  );
+}
+
+function FallbackPackSectionTitle({ children }: { children: ReactNode }) {
+  return (
+    <Box sx={{ display: "flex", justifyContent: "center", width: 1, pb: 1 }}>
+      <Typography
+        sx={{
+          fontSize: 18,
+          fontWeight: 500,
+          letterSpacing: "0.15px",
+          lineHeight: 1.5,
+          color: "text.primary",
+        }}
+      >
+        {children}
+      </Typography>
+    </Box>
+  );
+}
+
+function FallbackPackDialog({
+  open,
+  onClose,
+  onManualPack,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onManualPack?: (payload: { carrierRouteId: string; manualTrackingId: string }) => void;
+}) {
+  const d = FALLBACK_PACK_PROTOTYPE;
+  const [activeStep, setActiveStep] = useState(0);
+  const [manualTrackingId, setManualTrackingId] = useState("");
+  const [fallbackCarrierRouteId, setFallbackCarrierRouteId] = useState(INITIAL_CARRIER_ROUTE_ID);
+
+  useEffect(() => {
+    if (!open) return;
+    setActiveStep(0);
+    setManualTrackingId("");
+    setFallbackCarrierRouteId(INITIAL_CARRIER_ROUTE_ID);
+  }, [open]);
+
+  const handleClose = () => {
+    onClose();
+  };
+
+  const footerPrimary =
+    activeStep === 0 ? (
+      <Button
+        variant="contained"
+        color="primary"
+        onClick={() => setActiveStep(1)}
+        sx={{
+          px: 2.75,
+          py: 1,
+          textTransform: "uppercase",
+          fontWeight: 500,
+          fontSize: 15,
+          letterSpacing: "0.46px",
+          boxShadow:
+            "0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12)",
+        }}
+      >
+        Continue
+      </Button>
+    ) : (
+      <Button
+        variant="contained"
+        color="primary"
+        disabled={!manualTrackingId.trim()}
+        onClick={() => {
+          const tid = manualTrackingId.trim();
+          if (!tid) return;
+          onManualPack?.({ carrierRouteId: fallbackCarrierRouteId, manualTrackingId: tid });
+          handleClose();
+        }}
+        sx={{
+          px: 2.75,
+          py: 1,
+          textTransform: "uppercase",
+          fontWeight: 500,
+          fontSize: 15,
+          letterSpacing: "0.46px",
+          boxShadow:
+            "0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12)",
+        }}
+      >
+        Manual Pack
+      </Button>
+    );
+
+  return (
+    <Dialog
+      open={open}
+      onClose={handleClose}
+      maxWidth={false}
+      scroll="paper"
+      slotProps={{ backdrop: { sx: { bgcolor: "rgba(0,0,0,0.5)" } } }}
+      PaperProps={{
+        sx: {
+          width: "100%",
+          maxWidth: 700,
+          borderRadius: 1,
+          display: "flex",
+          flexDirection: "column",
+          maxHeight: "calc(100% - 64px)",
+          overflow: "hidden",
+        },
+      }}
+    >
+      <DialogTitle
+        component="div"
+        sx={{
+          pt: 3,
+          px: 3,
+          pb: 0,
+          pr: 5,
+          position: "relative",
+          fontSize: 16,
+          fontWeight: 500,
+          letterSpacing: "0.15px",
+          lineHeight: 1.5,
+        }}
+      >
+        Fallback Pack
+        <IconButton
+          aria-label="Close"
+          onClick={handleClose}
+          size="small"
+          sx={{ position: "absolute", right: 8, top: 8 }}
+        >
+          <CloseIcon />
+        </IconButton>
+      </DialogTitle>
+      <Box sx={{ px: 3, pt: 3, pb: 0 }}>
+        <Divider />
+      </Box>
+      <DialogContent
+        sx={{
+          px: 3,
+          pt: 6,
+          pb: 6,
+          overflow: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: 4,
+        }}
+      >
+        <Box
+          sx={{
+            position: "relative",
+            width: 1,
+            /** Connector joins circle edge to circle edge; centers at 25% / 75% for equal half-width columns. */
+          }}
+          role="group"
+          aria-label="Fallback pack steps"
+        >
+          <Box
+            sx={{
+              position: "absolute",
+              top: 12,
+              left: "calc(25% + 12px)",
+              width: "calc(50% - 24px)",
+              height: "1px",
+              transform: "translateY(-50%)",
+              bgcolor: "#bdbdbd",
+              overflow: "hidden",
+              zIndex: 0,
+            }}
+          >
+            <Box
+              sx={{
+                height: "100%",
+                width: activeStep === 0 ? "0%" : "100%",
+                bgcolor: "primary.main",
+                transition: "width 0.55s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            />
+          </Box>
+          <Stack direction="row" alignItems="flex-start" sx={{ position: "relative", zIndex: 1, width: 1 }}>
+            <Stack alignItems="center" spacing={1} sx={{ flex: "1 1 0", minWidth: 0 }}>
+              <FallbackPackStepDot stepNum={1} active={activeStep === 0} completed={activeStep === 1} />
+              <Typography
+                variant={activeStep === 0 ? "subtitle2" : "body2"}
+                fontWeight={activeStep === 0 ? 500 : 400}
+                color="text.primary"
+                textAlign="center"
+                sx={{
+                  letterSpacing: activeStep === 0 ? "0.1px" : "0.17px",
+                  lineHeight: activeStep === 0 ? 1.57 : 1.43,
+                  px: 0.5,
+                }}
+              >
+                Shipment Details
+              </Typography>
+            </Stack>
+            <Stack alignItems="center" spacing={1} sx={{ flex: "1 1 0", minWidth: 0 }}>
+              <FallbackPackStepDot stepNum={2} active={activeStep === 1} />
+              <Typography
+                variant={activeStep === 1 ? "subtitle2" : "body2"}
+                fontWeight={activeStep === 1 ? 500 : 400}
+                color="text.primary"
+                textAlign="center"
+                sx={{
+                  letterSpacing: activeStep === 1 ? "0.1px" : "0.17px",
+                  lineHeight: activeStep === 1 ? 1.57 : 1.43,
+                  px: 0.5,
+                }}
+              >
+                Manual Tracking ID
+              </Typography>
+            </Stack>
+          </Stack>
+        </Box>
+
+        {activeStep === 0 ? (
+          <Stack spacing={4} sx={{ width: 1, px: { xs: 0, sm: 3.5 }, pb: 2 }}>
+            <Stack spacing={2}>
+              <FallbackPackSectionTitle>Packing Facility Details</FallbackPackSectionTitle>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <FallbackPackCopyField label="Facility ID" value={d.facilityId} />
+                <FallbackPackCopyField label="Security Code" value={d.securityCode} />
+              </Stack>
+              <FallbackPackCopyField label="Facility Address" value={d.facilityAddress} />
+            </Stack>
+
+            <Stack spacing={2}>
+              <FallbackPackSectionTitle>Customer Address Details</FallbackPackSectionTitle>
+              <FallbackPackCopyField label="Name" value={d.customerName} />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <FallbackPackCopyField label="Street" value={d.street} />
+                <FallbackPackCopyField label="City" value={d.city} />
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <FallbackPackCopyField label="Zip Code" value={d.zip} />
+                <FallbackPackCopyField label="Country" value={d.country} />
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <FallbackPackCopyField label="Email" value={d.email} />
+                <FallbackPackCopyField label="Phone" value={d.phone} />
+              </Stack>
+            </Stack>
+
+            <Stack spacing={2}>
+              <FallbackPackSectionTitle>Item Details</FallbackPackSectionTitle>
+              <FallbackPackCopyField label="Product Name" value={d.productName} />
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <FallbackPackCopyField label="SKU" value={d.sku} />
+                <FallbackPackCopyField label="Quantity" value={d.quantity} />
+              </Stack>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5}>
+                <FallbackPackCopyField label="Unite Value" value={d.unitValue} />
+                <FallbackPackCopyField label="Weight" value={d.weight} />
+              </Stack>
+            </Stack>
+
+            <Stack spacing={2}>
+              <FallbackPackSectionTitle>Tax and Complicance</FallbackPackSectionTitle>
+              <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ width: 1 }}>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <FallbackPackCopyField label="Taxing Mode" value={d.taxingMode} />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <FallbackPackCopyField label="IOSS Number" value={d.iossNumber} />
+                </Box>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <FallbackPackCopyField label="Unite Value" value={d.taxComplianceUnitValue} />
+                </Box>
+              </Stack>
+            </Stack>
+          </Stack>
+        ) : (
+          <Stack
+            spacing={3}
+            sx={{ width: 1, px: { xs: 0, sm: 3.5 }, py: 2, minHeight: 240, alignItems: "center" }}
+          >
+            <LocalShippingOutlinedIcon sx={{ fontSize: 40, color: "action.disabled" }} />
+            <Typography
+              sx={{
+                fontSize: 18,
+                fontWeight: 600,
+                letterSpacing: "0.15px",
+                lineHeight: 1.5,
+                color: "text.primary",
+                textAlign: "center",
+              }}
+            >
+              Manual Tracking ID Details
+            </Typography>
+            <Stack spacing={2.5} sx={{ width: 1, maxWidth: 480, alignSelf: "center" }}>
+              <FormControl fullWidth variant="outlined">
+                <InputLabel id="fallback-pack-carrier-route-label">Carrier Route</InputLabel>
+                <Select<string>
+                  labelId="fallback-pack-carrier-route-label"
+                  label="Carrier Route"
+                  value={fallbackCarrierRouteId}
+                  onChange={(e: SelectChangeEvent<string>) => setFallbackCarrierRouteId(e.target.value)}
+                >
+                  {SHIPPING_ROUTE_ROWS.map((row) => (
+                    <MenuItem key={row.id} value={row.id}>
+                      {formatCarrierRouteDisplay(row)}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+              <TextField
+                label="Manual Tracking ID"
+                placeholder="Enter ID"
+                value={manualTrackingId}
+                onChange={(e) => setManualTrackingId(e.target.value)}
+                fullWidth
+                variant="outlined"
+                autoFocus
+              />
+            </Stack>
+          </Stack>
+        )}
+      </DialogContent>
+      <DialogActions
+        sx={{
+          px: 3,
+          py: 2,
+          justifyContent: "space-between",
+          borderTop: 1,
+          borderColor: "divider",
+          flexShrink: 0,
+        }}
+      >
+        <Button
+          onClick={handleClose}
+          sx={{
+            textTransform: "uppercase",
+            fontWeight: 500,
+            fontSize: 15,
+            letterSpacing: "0.46px",
+            color: "primary.main",
+            py: 1,
+            px: 1.5,
+          }}
+        >
+          Cancel
+        </Button>
+        <Stack direction="row" spacing={1} alignItems="center">
+          {activeStep === 1 ? (
+            <Button
+              onClick={() => setActiveStep(0)}
+              sx={{
+                textTransform: "uppercase",
+                fontWeight: 500,
+                fontSize: 15,
+                letterSpacing: "0.46px",
+                color: "primary.main",
+              }}
+            >
+              Back
+            </Button>
+          ) : null}
+          {footerPrimary}
+        </Stack>
       </DialogActions>
     </Dialog>
   );
@@ -1847,24 +2315,7 @@ function JoinShipmentDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pr: 1,
-          pt: 2.5,
-          pb: 1,
-          flexShrink: 0,
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
-          Join Shipment
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Join Shipment</StandardDialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogContent
         sx={{
@@ -1930,53 +2381,67 @@ function JoinShipmentDialog({
                   </IconButton>
                 </Stack>
                 <Stack spacing={1.5} sx={{ overflow: "auto", pr: 0.5, flex: 1, minHeight: 0 }}>
-                  {sourceItems.map((item) => (
-                    <Paper
-                      key={item.id}
-                      variant="outlined"
-                      sx={{
-                        p: 1.5,
-                        borderRadius: 1,
-                        borderColor: "divider",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1.5,
-                      }}
-                    >
-                      <Box
-                        component="img"
-                        src={item.image}
-                        alt=""
-                        sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
-                      />
-                      <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
-                        {item.title}
-                      </Typography>
-                      {item.movable ? (
-                        <Button
-                          size="small"
-                          color="primary"
-                          endIcon={<ArrowForwardIcon sx={{ fontSize: 18 }} />}
-                          onClick={() => moveToCurrent(item.id)}
-                          sx={{
-                            flexShrink: 0,
-                            textTransform: "none",
-                            fontWeight: 600,
-                            letterSpacing: "0.3px",
-                            minWidth: "auto",
-                            px: 0.5,
-                          }}
-                        >
-                          MOVE
-                        </Button>
-                      ) : null}
-                    </Paper>
-                  ))}
                   {sourceItems.length === 0 ? (
-                    <Typography variant="body2" color="text.secondary">
-                      No items in this shipment.
-                    </Typography>
-                  ) : null}
+                    <Stack
+                      flex={1}
+                      alignItems="center"
+                      justifyContent="center"
+                      spacing={1.5}
+                      sx={{ px: 3, py: 6, minHeight: 240 }}
+                    >
+                      <Inventory2OutlinedIcon sx={{ fontSize: 32, color: "action.disabled" }} />
+                      <Typography
+                        variant="body1"
+                        color="text.secondary"
+                        textAlign="center"
+                        sx={{ letterSpacing: "0.15px", lineHeight: 1.5 }}
+                      >
+                        No Items Available
+                      </Typography>
+                    </Stack>
+                  ) : (
+                    sourceItems.map((item) => (
+                      <Paper
+                        key={item.id}
+                        variant="outlined"
+                        sx={{
+                          p: 1.5,
+                          borderRadius: 1,
+                          borderColor: "divider",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 1.5,
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={item.image}
+                          alt=""
+                          sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
+                        />
+                        <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
+                          {item.title}
+                        </Typography>
+                        {item.movable ? (
+                          <Button
+                            size="small"
+                            color="primary"
+                            endIcon={<ArrowForwardIcon sx={{ fontSize: 18 }} />}
+                            onClick={() => moveToCurrent(item.id)}
+                            sx={{
+                              flexShrink: 0,
+                              textTransform: "none",
+                              fontWeight: 600,
+                              minWidth: "auto",
+                              px: 0.5,
+                            }}
+                          >
+                            Move
+                          </Button>
+                        ) : null}
+                      </Paper>
+                    ))
+                  )}
                 </Stack>
               </>
             )}
@@ -2031,48 +2496,67 @@ function JoinShipmentDialog({
               </Typography>
             </Stack>
             <Stack spacing={1.5} sx={{ overflow: "auto", pr: 0.5, flex: 1, minHeight: 0 }}>
-              {currentItems.map((item) => (
-                <Paper
-                  key={item.id}
-                  variant="outlined"
-                  sx={{
-                    p: 1.5,
-                    borderRadius: 1,
-                    borderColor: "divider",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 1.5,
-                  }}
+              {currentItems.length === 0 ? (
+                <Stack
+                  flex={1}
+                  alignItems="center"
+                  justifyContent="center"
+                  spacing={1.5}
+                  sx={{ px: 3, py: 6, minHeight: 240 }}
                 >
-                  <Box
-                    component="img"
-                    src={item.image}
-                    alt=""
-                    sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
-                  />
-                  <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
-                    {item.title}
+                  <Inventory2OutlinedIcon sx={{ fontSize: 32, color: "action.disabled" }} />
+                  <Typography
+                    variant="body1"
+                    color="text.secondary"
+                    textAlign="center"
+                    sx={{ letterSpacing: "0.15px", lineHeight: 1.5 }}
+                  >
+                    No Items Available
                   </Typography>
-                  {item.movable ? (
-                    <Button
-                      size="small"
-                      color="primary"
-                      startIcon={<ArrowBackIcon sx={{ fontSize: 18 }} />}
-                      onClick={() => moveToSource(item.id)}
-                      sx={{
-                        flexShrink: 0,
-                        textTransform: "none",
-                        fontWeight: 600,
-                        letterSpacing: "0.3px",
-                        minWidth: "auto",
-                        px: 0.5,
-                      }}
-                    >
-                      MOVE
-                    </Button>
-                  ) : null}
-                </Paper>
-              ))}
+                </Stack>
+              ) : (
+                currentItems.map((item) => (
+                  <Paper
+                    key={item.id}
+                    variant="outlined"
+                    sx={{
+                      p: 1.5,
+                      borderRadius: 1,
+                      borderColor: "divider",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1.5,
+                    }}
+                  >
+                    <Box
+                      component="img"
+                      src={item.image}
+                      alt=""
+                      sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
+                    />
+                    <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
+                      {item.title}
+                    </Typography>
+                    {item.movable ? (
+                      <Button
+                        size="small"
+                        color="primary"
+                        startIcon={<ArrowBackIcon sx={{ fontSize: 18 }} />}
+                        onClick={() => moveToSource(item.id)}
+                        sx={{
+                          flexShrink: 0,
+                          textTransform: "none",
+                          fontWeight: 600,
+                          minWidth: "auto",
+                          px: 0.5,
+                        }}
+                      >
+                        Move
+                      </Button>
+                    ) : null}
+                  </Paper>
+                ))
+              )}
             </Stack>
           </Stack>
         </Stack>
@@ -2082,7 +2566,7 @@ function JoinShipmentDialog({
         <Button
           variant="outlined"
           onClick={onClose}
-          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, py: 1, px: 2.75 }}
         >
           Cancel
         </Button>
@@ -2091,7 +2575,7 @@ function JoinShipmentDialog({
           color="primary"
           disabled={!transferDirty}
           onClick={handleConfirm}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ py: 1, px: 2.75 }}
         >
           Confirm & Save
         </Button>
@@ -2241,24 +2725,7 @@ function SplitShipmentDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pr: 1,
-          pt: 2.5,
-          pb: 1,
-          flexShrink: 0,
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
-          Split Shipment
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Split Shipment</StandardDialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogContent
         sx={{
@@ -2316,12 +2783,11 @@ function SplitShipmentDialog({
                         flexShrink: 0,
                         textTransform: "none",
                         fontWeight: 600,
-                        letterSpacing: "0.3px",
                         minWidth: "auto",
                         px: 1,
                       }}
                     >
-                      MOVE
+                      Move
                     </Button>
                   ) : null}
                 </Paper>
@@ -2410,12 +2876,11 @@ function SplitShipmentDialog({
                             flexShrink: 0,
                             textTransform: "none",
                             fontWeight: 600,
-                            letterSpacing: "0.3px",
                             minWidth: "auto",
                             px: 1,
                           }}
                         >
-                          MOVE
+                          Move
                         </Button>
                       ) : null}
                     </Paper>
@@ -2431,7 +2896,7 @@ function SplitShipmentDialog({
         <Button
           variant="outlined"
           onClick={onClose}
-          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, py: 1, px: 2.75 }}
         >
           Cancel
         </Button>
@@ -2440,7 +2905,7 @@ function SplitShipmentDialog({
           color="primary"
           disabled={!transferDirty}
           onClick={handleConfirm}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ py: 1, px: 2.75 }}
         >
           Confirm & Save
         </Button>
@@ -2487,26 +2952,7 @@ function ItemRemarksDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 2,
-          pr: 1,
-          pb: 1,
-          pt: 3,
-          px: 3,
-          flexShrink: 0,
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
-          Item Remarks
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mr: -0.5 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Item Remarks</StandardDialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogContent
         sx={{
@@ -2545,7 +2991,7 @@ function ItemRemarksDialog({
       </DialogContent>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "flex-end", flexShrink: 0 }}>
-        <Button variant="contained" color="primary" onClick={onClose} sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}>
+        <Button variant="contained" color="primary" onClick={onClose}>
           Close
         </Button>
       </DialogActions>
@@ -2612,26 +3058,7 @@ function CreateRemarkDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "flex-start",
-          justifyContent: "space-between",
-          gap: 2,
-          pr: 1,
-          pb: 1,
-          pt: 3,
-          px: 3,
-          flexShrink: 0,
-        }}
-      >
-        <Typography variant="subtitle1" fontWeight={500} color="text.primary" component="span" sx={{ letterSpacing: "0.15px" }}>
-          Packing Remarks
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Packing Remarks</StandardDialogTitle>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogContent
         sx={{
@@ -2738,7 +3165,7 @@ function CreateRemarkDialog({
       </DialogContent>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
-        <Button variant="outlined" onClick={onClose} sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px" }}>
+        <Button variant="outlined" onClick={onClose} sx={DIALOG_CANCEL_BUTTON_SX}>
           Cancel
         </Button>
         <Button
@@ -2746,9 +3173,8 @@ function CreateRemarkDialog({
           color="primary"
           disabled={!canSend}
           onClick={handleSend}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}
         >
-          Send message
+          Send Message
         </Button>
       </DialogActions>
     </Dialog>
@@ -2798,24 +3224,9 @@ function CarrierShippingRouteDialog({
         },
       }}
     >
-      <DialogTitle
-        sx={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          pr: 1,
-          pb: 1,
-        }}
-      >
-        <Typography variant="h6" component="span" fontWeight={600} color="text.primary">
-          Carrier Shipping Route
-        </Typography>
-        <IconButton aria-label="Close" onClick={onClose} size="small">
-          <CloseIcon />
-        </IconButton>
-      </DialogTitle>
+      <StandardDialogTitle onClose={onClose}>Carrier Shipping Route</StandardDialogTitle>
       <Divider />
-      <DialogContent sx={{ pt: 3, pb: 2 }}>
+      <DialogContent sx={{ px: 3, pt: 3, pb: 2 }}>
         <Stack spacing={3}>
           <Box>
             <Typography fontWeight={600} color="text.primary" sx={{ mb: 1.5 }}>
@@ -2918,7 +3329,6 @@ function CarrierShippingRouteDialog({
           variant="contained"
           disabled={pendingRouteId === activeRouteId}
           onClick={handleSave}
-          sx={{ textTransform: "uppercase" }}
         >
           Save
         </Button>
@@ -2996,8 +3406,13 @@ export default function ReadyToPack() {
   const [createRemarkDefaultItemId, setCreateRemarkDefaultItemId] = useState<string | null>(null);
   const [itemRemarksItemId, setItemRemarksItemId] = useState<string | null>(null);
   const [moreActionsMenuAnchor, setMoreActionsMenuAnchor] = useState<null | HTMLElement>(null);
+  const [prototypeDemoSearchMenuAnchor, setPrototypeDemoSearchMenuAnchor] = useState<null | HTMLElement>(null);
   const [onHoldStatusMenuAnchor, setOnHoldStatusMenuAnchor] = useState<null | HTMLElement>(null);
   const [packingOrderUiStatus, setPackingOrderUiStatus] = useState<PackingOrderUiStatus>("readyToPack");
+  /** Prototype `fallback` search: Pack → loading → failed API (Figma 1762:35805). */
+  const [fallbackPackSubmitPhase, setFallbackPackSubmitPhase] = useState<"idle" | "loading" | "failed">("idle");
+  const [fallbackPackDialogOpen, setFallbackPackDialogOpen] = useState(false);
+  const fallbackPackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [sentToFixReason, setSentToFixReason] = useState<string | null>(null);
   /** After OK/Cancel, hide the pending notice until `loadedOrderId` changes again. */
   const [pendingShipmentDialogDismissed, setPendingShipmentDialogDismissed] = useState(false);
@@ -3019,6 +3434,8 @@ export default function ReadyToPack() {
   const [otherFacilitiesSectionExpanded, setOtherFacilitiesSectionExpanded] = useState(true);
   /** Prototype: header profile toggles Hungary vs Kiryat Gat packing layout. */
   const [prototypeFactorySiteView, setPrototypeFactorySiteView] = useState<"kiryatGat" | "hungary">("kiryatGat");
+  /** Prototype: packer vs supervisor (supervisor unlocks Fallback Pack on fallback retry UI). */
+  const [prototypeAccountRole, setPrototypeAccountRole] = useState<"packer" | "supervisor">("packer");
   /** Figma 2345:27263 — per line item, container location after simulated scan. */
   const [containerAssignByItemId, setContainerAssignByItemId] = useState<
     Record<string, PrototypeContainerAssignDetail>
@@ -3029,6 +3446,7 @@ export default function ReadyToPack() {
   const isSortingStationView = isSortingStationOrderId(loadedOrderId);
   const isSimilarOrdersView = isPrototypeSimilarOrdersId(loadedOrderId);
   const isSplitOrdersView = isPrototypeSplitOrdersId(loadedOrderId);
+  const isFallbackPrototype = isPrototypeFallbackOrderId(loadedOrderId);
   /** On-hold + sorting: per-line container row (sorting = “Scan to Assign” until scanned; on-hold skips gift kit). */
   const showItemContainerAssignRow = packingOrderUiStatus === "onHold" || isSortingStationView;
 
@@ -3087,13 +3505,15 @@ export default function ReadyToPack() {
         ? activeSplitOrder.orderNumber
         : isPrototypeManualPackOrderId(loadedOrderId)
           ? "5847219"
-          : loadedOrderId;
+          : isPrototypeFallbackOrderId(loadedOrderId)
+            ? "30238941234"
+            : loadedOrderId;
   const joinDialogShipmentId =
     isSimilarOrdersView && loadedOrderId
       ? activeSimilarOrder.shipmentId
       : isSplitOrdersView && loadedOrderId && activeSplitOrder
         ? activeSplitOrder.shipmentId
-        : isPrototypeManualPackOrderId(loadedOrderId)
+        : isPrototypeManualPackOrderId(loadedOrderId) || isPrototypeFallbackOrderId(loadedOrderId)
           ? "SH-12345"
           : loadedOrderId ?? "";
 
@@ -3227,6 +3647,20 @@ export default function ReadyToPack() {
   }, [loadedOrderId]);
 
   useEffect(() => {
+    return () => {
+      if (fallbackPackTimerRef.current) {
+        clearTimeout(fallbackPackTimerRef.current);
+        fallbackPackTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (fallbackPackTimerRef.current) {
+      clearTimeout(fallbackPackTimerRef.current);
+      fallbackPackTimerRef.current = null;
+    }
+    setFallbackPackSubmitPhase("idle");
     setItemsReviewed(false);
     const isFixQueue = isPrototypePendingOrderId(loadedOrderId);
     const isCancelledProto = isPrototypeCancelledOrderId(loadedOrderId);
@@ -3282,6 +3716,7 @@ export default function ReadyToPack() {
       setManualTrackingInput(PROTOTYPE_MANUAL_PACK_TRACKING_DEMO);
     }
     setPrototypeFactorySiteView("kiryatGat");
+    setPrototypeAccountRole("packer");
     const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
     if (isOnHoldProto) {
       setRemoteFacilityItemIds([...PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS]);
@@ -3427,8 +3862,10 @@ export default function ReadyToPack() {
     }
   };
 
-  const handleLoadOrder = () => {
-    const id = normalizeOrderIdForLoad(orderInput);
+  const handleLoadOrderFromInput = (raw: string) => {
+    const trimmed = raw.trim();
+    setOrderInput(trimmed);
+    const id = normalizeOrderIdForLoad(trimmed);
     if (!id) {
       setLoadedOrderId(null);
       setNotFoundQuery(null);
@@ -3448,6 +3885,10 @@ export default function ReadyToPack() {
       setSplitLinkedPair(null);
       setSplitTabInventories(null);
     }
+  };
+
+  const handleLoadOrder = () => {
+    handleLoadOrderFromInput(orderInput);
   };
 
   const handleNextOrder = () => {
@@ -3488,6 +3929,20 @@ export default function ReadyToPack() {
       setNotFoundQuery(null);
       setOrderBrowseStack([]);
     }
+  };
+
+  const startFallbackPackApiSimulation = () => {
+    if (fallbackPackTimerRef.current) {
+      clearTimeout(fallbackPackTimerRef.current);
+      fallbackPackTimerRef.current = null;
+    }
+    setPackingOrderUiStatus("readyToPack");
+    setFallbackPackSubmitPhase("loading");
+    fallbackPackTimerRef.current = setTimeout(() => {
+      fallbackPackTimerRef.current = null;
+      setFallbackPackSubmitPhase("failed");
+      setPackingOrderUiStatus("packApiFailed");
+    }, 1600);
   };
 
   return (
@@ -3548,81 +4003,95 @@ export default function ReadyToPack() {
               py: 0.5,
               bgcolor: "background.paper",
               width: 600,
+              boxSizing: "border-box",
             }}
           >
-            <TextField
-              variant="standard"
-              value={orderInput}
-              onChange={(e) => setOrderInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                  e.preventDefault();
-                  handleLoadOrder();
-                }
-              }}
-              placeholder={isInitialScanScreen ? ORDER_SEARCH_PLACEHOLDER : undefined}
-              autoFocus={isInitialScanScreen}
-              InputProps={{
-                disableUnderline: true,
-                startAdornment: (
-                  <InputAdornment position="start" sx={{ mr: 0 }}>
-                    <NumbersIcon sx={{ fontSize: 24, color: "text.secondary", mr: 0.5 }} />
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Tooltip title="Search">
-                      <IconButton
-                        size="small"
-                        edge="end"
-                        aria-label="Search"
-                        onClick={handleLoadOrder}
-                      >
-                        <SearchIcon />
-                      </IconButton>
-                    </Tooltip>
-                  </InputAdornment>
-                ),
-                sx: { px: 2, py: 1, width: "100%", minWidth: 450 },
-              }}
-              sx={{
-                flex: 1,
-                minWidth: 0,
-                "& .MuiInputBase-input": { py: 0.5 },
-                "& .MuiInputBase-input::placeholder": {
-                  opacity: 1,
-                  color: "action.disabled",
-                },
-              }}
-            />
-            <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: "divider" }} />
-            <Stack direction="row" spacing={1} sx={{ pl: 1 }}>
-              <Tooltip title="View Order Details">
-                <Box component="span" sx={{ display: "inline-flex" }}>
-                  <IconButton size="small" aria-label="View Order Details" disabled={isEmptyState}>
-                    <ListAltIcon />
-                  </IconButton>
-                </Box>
-              </Tooltip>
-              <Tooltip title="Back order">
-                <Box component="span" sx={{ display: "inline-flex" }}>
-                  <IconButton
-                    size="small"
-                    aria-label="Back order"
-                    disabled={orderBrowseStack.length === 0}
-                    onClick={handlePreviousOrder}
-                  >
-                    <ArrowBackIcon />
-                  </IconButton>
-                </Box>
-              </Tooltip>
-              <Tooltip title="Next Order">
-                <Box component="span" sx={{ display: "inline-flex" }}>
-                  <IconButton size="small" aria-label="Next Order" onClick={handleNextOrder}>
-                    <ArrowForwardIcon />
-                  </IconButton>
-                </Box>
-              </Tooltip>
+            <Stack direction="row" alignItems="center" sx={{ width: "100%", minWidth: 0 }}>
+              <TextField
+                variant="standard"
+                value={orderInput}
+                onChange={(e) => setOrderInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    handleLoadOrder();
+                  }
+                }}
+                placeholder={isInitialScanScreen ? ORDER_SEARCH_PLACEHOLDER : undefined}
+                autoFocus={isInitialScanScreen}
+                InputProps={{
+                  disableUnderline: true,
+                  startAdornment: (
+                    <InputAdornment position="start" sx={{ mr: 0 }}>
+                      <NumbersIcon sx={{ fontSize: 24, color: "text.secondary", mr: 0.5 }} />
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Tooltip title={orderInput.trim() ? "Search" : "Search or pick a demo keyword"}>
+                        <IconButton
+                          size="small"
+                          edge="end"
+                          aria-label="Search"
+                          aria-haspopup={!orderInput.trim() ? "menu" : undefined}
+                          aria-controls={!orderInput.trim() ? "prototype-demo-search-menu" : undefined}
+                          aria-expanded={
+                            !orderInput.trim() && Boolean(prototypeDemoSearchMenuAnchor) ? true : undefined
+                          }
+                          onClick={(e) => {
+                            if (!orderInput.trim()) {
+                              setPrototypeDemoSearchMenuAnchor(e.currentTarget);
+                              return;
+                            }
+                            handleLoadOrder();
+                          }}
+                        >
+                          <SearchIcon />
+                        </IconButton>
+                      </Tooltip>
+                    </InputAdornment>
+                  ),
+                  sx: { px: 2, py: 1, width: "100%", minWidth: 450 },
+                }}
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  "& .MuiInputBase-input": { py: 0.5 },
+                  "& .MuiInputBase-input::placeholder": {
+                    opacity: 1,
+                    color: "action.disabled",
+                  },
+                }}
+              />
+              <Divider orientation="vertical" flexItem sx={{ mx: 1, borderColor: "divider" }} />
+              <Stack direction="row" spacing={1} sx={{ pl: 1 }}>
+                <Tooltip title="View Order Details">
+                  <Box component="span" sx={{ display: "inline-flex" }}>
+                    <IconButton size="small" aria-label="View Order Details" disabled={isEmptyState}>
+                      <ListAltIcon />
+                    </IconButton>
+                  </Box>
+                </Tooltip>
+                <Tooltip title="Back order">
+                  <Box component="span" sx={{ display: "inline-flex" }}>
+                    <IconButton
+                      size="small"
+                      aria-label="Back order"
+                      disabled={orderBrowseStack.length === 0}
+                      onClick={handlePreviousOrder}
+                    >
+                      <ArrowBackIcon />
+                    </IconButton>
+                  </Box>
+                </Tooltip>
+                <Tooltip title="Next Order">
+                  <Box component="span" sx={{ display: "inline-flex" }}>
+                    <IconButton size="small" aria-label="Next Order" onClick={handleNextOrder}>
+                      <ArrowForwardIcon />
+                    </IconButton>
+                  </Box>
+                </Tooltip>
+              </Stack>
             </Stack>
           </Paper>
 
@@ -3639,35 +4108,115 @@ export default function ReadyToPack() {
               </IconButton>
             </Tooltip>
             <Divider orientation="vertical" flexItem sx={{ height: 40, borderColor: "divider" }} />
-            <ButtonBase
-              onClick={handleTogglePrototypeFactorySite}
-              sx={{
-                borderRadius: 1,
-                px: 0.5,
-                py: 0.25,
-                textAlign: "left",
-                color: "inherit",
-              }}
-              aria-label={
-                prototypeFactorySiteView === "hungary"
-                  ? "Switch to Kiryat Gat factory view"
-                  : "Switch to Hungary factory view"
-              }
-            >
-              <Stack direction="row" alignItems="center" spacing={1}>
-                <Avatar sx={{ width: 32, height: 32, bgcolor: "#90a4ae", fontSize: 12 }}>JD</Avatar>
-                <Stack sx={{ minWidth: 0 }}>
+            <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ color: "inherit" }}>
+              <ButtonBase
+                onClick={() =>
+                  setPrototypeAccountRole((r) => (r === "packer" ? "supervisor" : "packer"))
+                }
+                sx={{ borderRadius: 1, alignSelf: "flex-start", px: 0.5, py: 0.25, mt: 0.125 }}
+                aria-label={
+                  prototypeAccountRole === "packer"
+                    ? "Switch to supervisor account"
+                    : "Switch to packer account"
+                }
+              >
+                <Avatar
+                  sx={{
+                    width: 32,
+                    height: 32,
+                    fontSize: 12,
+                    bgcolor:
+                      prototypeAccountRole === "supervisor"
+                        ? PROTOTYPE_SUPERVISOR_AVATAR_BG
+                        : PROTOTYPE_PACKER_AVATAR_BG,
+                  }}
+                >
+                  {prototypeAccountRole === "supervisor"
+                    ? PROTOTYPE_SUPERVISOR_INITIALS
+                    : "JD"}
+                </Avatar>
+              </ButtonBase>
+              <Stack sx={{ minWidth: 0 }}>
+                <ButtonBase
+                  onClick={() =>
+                    setPrototypeAccountRole((r) => (r === "packer" ? "supervisor" : "packer"))
+                  }
+                  sx={{
+                    borderRadius: 1,
+                    px: 0.5,
+                    py: 0.125,
+                    display: "block",
+                    textAlign: "left",
+                    width: "100%",
+                    color: "inherit",
+                  }}
+                  aria-label={
+                    prototypeAccountRole === "packer"
+                      ? "Switch to supervisor account"
+                      : "Switch to packer account"
+                  }
+                >
                   <Typography variant="body2" fontWeight={500} textAlign="left">
-                    {prototypeFactorySiteView === "hungary" ? "James" : "John"}
+                    {prototypeAccountRole === "supervisor"
+                      ? PROTOTYPE_SUPERVISOR_DISPLAY_NAME
+                      : prototypeFactorySiteView === "hungary"
+                        ? "James"
+                        : "John"}
                   </Typography>
-                  <Typography variant="caption" color="text.secondary" textAlign="left">
+                </ButtonBase>
+                <ButtonBase
+                  onClick={handleTogglePrototypeFactorySite}
+                  sx={{
+                    borderRadius: 1,
+                    px: 0.5,
+                    py: 0.125,
+                    display: "block",
+                    textAlign: "left",
+                    width: "100%",
+                  }}
+                  aria-label={
+                    prototypeFactorySiteView === "hungary"
+                      ? "Switch to Kiryat Gat factory view"
+                      : "Switch to Hungary factory view"
+                  }
+                >
+                  <Typography variant="caption" color="text.secondary" textAlign="left" display="block">
                     {prototypeFactorySiteView === "hungary" ? "Hungary" : "Kiryat Gat"}
                   </Typography>
-                </Stack>
+                </ButtonBase>
               </Stack>
-            </ButtonBase>
+            </Stack>
           </Stack>
         </Toolbar>
+        <Menu
+          id="prototype-demo-search-menu"
+          anchorEl={prototypeDemoSearchMenuAnchor}
+          open={Boolean(prototypeDemoSearchMenuAnchor)}
+          onClose={() => setPrototypeDemoSearchMenuAnchor(null)}
+          anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+          transformOrigin={{ vertical: "top", horizontal: "right" }}
+          slotProps={{ paper: { sx: { minWidth: 220, maxWidth: 320 } } }}
+        >
+          <ListSubheader
+            disableSticky
+            sx={{ typography: "caption", color: "text.secondary", lineHeight: 1.4, py: 1, px: 2 }}
+          >
+            Tap a keyword to run search
+          </ListSubheader>
+          {PROTOTYPE_SEARCH_KEYWORDS.map((kw) => (
+            <MenuItem
+              key={kw}
+              dense
+              onClick={() => {
+                setPrototypeDemoSearchMenuAnchor(null);
+                handleLoadOrderFromInput(kw);
+              }}
+              sx={{ fontFamily: "ui-monospace, monospace", fontSize: 14 }}
+            >
+              {kw}
+            </MenuItem>
+          ))}
+        </Menu>
       </AppBar>
 
       {loadedOrderId ? (
@@ -4453,7 +5002,7 @@ export default function ReadyToPack() {
                       <Checkbox
                         checked={itemsReviewed}
                         onChange={(_, checked) => setItemsReviewed(checked)}
-                        disabled={packingOrderUiStatus !== "readyToPack"}
+                        disabled={packingOrderUiStatus !== "readyToPack" && packingOrderUiStatus !== "packApiFailed"}
                         color="primary"
                         size="medium"
                         sx={{ py: 0.5, pl: 0, pr: 0.5 }}
@@ -4963,6 +5512,48 @@ export default function ReadyToPack() {
                       </Stack>
                     </Alert>
                 ) : null}
+                {packingOrderUiStatus === "packApiFailed" ? (
+                    <Alert
+                      severity="warning"
+                      variant="standard"
+                      icon={<ErrorOutlineIcon />}
+                      sx={{
+                        alignItems: "flex-start",
+                        py: 1.5,
+                        px: 2,
+                        borderRadius: 1,
+                        border: "none",
+                        boxShadow: "none",
+                        bgcolor: orange[50],
+                        color: "#663C00",
+                        "& .MuiAlert-icon": { color: "error.main", alignItems: "center", pt: 0.25 },
+                        "& .MuiAlert-message": { width: "100%", pt: 0.125, color: "#663C00" },
+                      }}
+                    >
+                      <AlertTitle
+                        sx={{
+                          fontWeight: 600,
+                          fontSize: 16,
+                          color: "#663C00",
+                          mb: 0.5,
+                          letterSpacing: "0.15px",
+                        }}
+                      >
+                        {PROTOTYPE_FALLBACK_PACK_ERROR_TITLE}
+                      </AlertTitle>
+                      <Typography
+                        variant="body2"
+                        sx={{
+                          letterSpacing: "0.15px",
+                          lineHeight: 1.43,
+                          color: "#663C00",
+                          fontWeight: 500,
+                        }}
+                      >
+                        {PROTOTYPE_FALLBACK_PACK_ERROR_DETAIL}
+                      </Typography>
+                    </Alert>
+                ) : null}
                 {packingOrderUiStatus === "pending" && sentToFixReason ? (
                     <Alert
                       severity="warning"
@@ -5137,12 +5728,24 @@ export default function ReadyToPack() {
                     color="primary"
                     disabled={
                       !itemsReviewed ||
-                      packingOrderUiStatus !== "readyToPack" ||
-                      (trackingManualMode && manualTrackingInput.trim() === "")
+                      (packingOrderUiStatus !== "readyToPack" && packingOrderUiStatus !== "packApiFailed") ||
+                      (trackingManualMode && manualTrackingInput.trim() === "") ||
+                      fallbackPackSubmitPhase === "loading"
                     }
                     onClick={() => {
+                      if (fallbackPackSubmitPhase === "loading") return;
                       if (
-                        itemsReviewed &&
+                        !itemsReviewed ||
+                        (packingOrderUiStatus !== "readyToPack" && packingOrderUiStatus !== "packApiFailed") ||
+                        (trackingManualMode && manualTrackingInput.trim() === "")
+                      ) {
+                        return;
+                      }
+                      if (isFallbackPrototype) {
+                        startFallbackPackApiSimulation();
+                        return;
+                      }
+                      if (
                         packingOrderUiStatus === "readyToPack" &&
                         (!trackingManualMode || manualTrackingInput.trim() !== "")
                       ) {
@@ -5150,16 +5753,22 @@ export default function ReadyToPack() {
                       }
                     }}
                     startIcon={
-                      <ShoppingBagOutlinedIcon
-                        sx={
-                          trackingManualMode &&
-                          itemsReviewed &&
-                          packingOrderUiStatus === "readyToPack" &&
-                          manualTrackingInput.trim() !== ""
-                            ? { color: "#fff !important" }
-                            : undefined
-                        }
-                      />
+                      fallbackPackSubmitPhase === "loading" ? (
+                        <CircularProgress size={22} color="inherit" sx={{ color: "#fff !important" }} />
+                      ) : isFallbackPrototype && fallbackPackSubmitPhase === "failed" ? (
+                        <SyncIcon sx={{ color: "#fff !important" }} />
+                      ) : (
+                        <ShoppingBagOutlinedIcon
+                          sx={
+                            trackingManualMode &&
+                            itemsReviewed &&
+                            packingOrderUiStatus === "readyToPack" &&
+                            manualTrackingInput.trim() !== ""
+                              ? { color: "#fff !important" }
+                              : undefined
+                          }
+                        />
+                      )
                     }
                     sx={{
                       minHeight: 56,
@@ -5168,8 +5777,6 @@ export default function ReadyToPack() {
                       boxSizing: "border-box",
                       fontSize: 18,
                       fontWeight: 500,
-                      letterSpacing: "0.46px",
-                      textTransform: "uppercase",
                       ...(trackingManualMode &&
                         packingOrderUiStatus === "readyToPack" &&
                         manualTrackingInput.trim() !== "" && {
@@ -5181,10 +5788,36 @@ export default function ReadyToPack() {
                         }),
                     }}
                   >
-                    {trackingManualMode
-                      ? `manual pack ${packItemCountUi} items`
-                      : `pack ${packItemCountUi} items`}
+                    {fallbackPackSubmitPhase === "loading"
+                      ? "Packing…"
+                      : isFallbackPrototype && fallbackPackSubmitPhase === "failed"
+                        ? `Retry Pack ${packItemCountUi} Items`
+                        : trackingManualMode
+                          ? `Manual Pack ${packItemCountUi} Items`
+                          : `Pack ${packItemCountUi} Items`}
                   </Button>
+                  {isFallbackPrototype &&
+                  packingOrderUiStatus === "packApiFailed" &&
+                  fallbackPackSubmitPhase === "failed" &&
+                  prototypeAccountRole === "supervisor" ? (
+                    <Button
+                      fullWidth
+                      variant="outlined"
+                      color="primary"
+                      onClick={() => setFallbackPackDialogOpen(true)}
+                      sx={{
+                        minHeight: 56,
+                        height: 56,
+                        py: 0,
+                        boxSizing: "border-box",
+                        fontSize: 18,
+                        fontWeight: 500,
+                        textTransform: "none",
+                      }}
+                    >
+                      Fallback Pack
+                    </Button>
+                  ) : null}
                   {(!hungaryFactoryDemoActive || orderPacked) ? (
                   <Stack direction="row" spacing={1}>
                     {!orderPacked && !hungaryFactoryDemoActive ? (
@@ -5201,13 +5834,11 @@ export default function ReadyToPack() {
                           boxSizing: "border-box",
                           fontSize: 18,
                           fontWeight: 500,
-                          letterSpacing: "0.46px",
-                          textTransform: "uppercase",
                           borderColor: "primary.main",
                           color: "primary.main",
                         }}
                       >
-                        send to fix
+                        Send to Fix
                       </Button>
                     ) : null}
                     <Button
@@ -5227,13 +5858,11 @@ export default function ReadyToPack() {
                         boxSizing: "border-box",
                         fontSize: 18,
                         fontWeight: 500,
-                        letterSpacing: "0.46px",
-                        textTransform: "uppercase",
                         borderColor: "primary.main",
                         color: "primary.main",
                       }}
                     >
-                      more actions
+                      More Actions
                     </Button>
                     <Menu
                       id="more-actions-menu"
@@ -5279,7 +5908,6 @@ export default function ReadyToPack() {
                             py: 0.75,
                             px: 2,
                             typography: "body1",
-                            letterSpacing: "0.15px",
                           }}
                         >
                           <ListItemIcon sx={{ minWidth: 36 }}>
@@ -5302,6 +5930,15 @@ export default function ReadyToPack() {
       ) : (
         <EmptyStateHero />
       )}
+      <FallbackPackDialog
+        open={fallbackPackDialogOpen}
+        onClose={() => setFallbackPackDialogOpen(false)}
+        onManualPack={({ carrierRouteId, manualTrackingId: tid }) => {
+          setActiveCarrierRouteId(carrierRouteId);
+          setTrackingManualMode(true);
+          setManualTrackingInput(tid);
+        }}
+      />
       <CarrierShippingRouteDialog
         open={carrierRouteDialogOpen}
         onClose={() => setCarrierRouteDialogOpen(false)}
