@@ -1,4 +1,13 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import {
+  Fragment,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent,
+  type ReactNode,
+} from "react";
 import {
   Alert,
   AlertTitle,
@@ -7,7 +16,9 @@ import {
   Badge,
   Box,
   Button,
+  ButtonBase,
   Checkbox,
+  Collapse,
   Chip,
   CircularProgress,
   Dialog,
@@ -72,6 +83,8 @@ import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SyncIcon from "@mui/icons-material/Sync";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
+import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
+import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 
 import { loadNewSplitShipmentIdFromApi } from "../api/loadNewSplitShipmentId";
 import { loadTrackingNumberFromApi } from "../api/loadTrackingNumber";
@@ -209,10 +222,10 @@ function getPackingStatusChipConfig(status: PackingOrderUiStatus, theme: Theme) 
         label: "On Hold",
         Icon: PauseCircleOutlineIcon,
         iconSize: 18,
-        bgcolor: "#eceff1",
-        color: "#37474f",
-        border: false,
-        borderColor: "transparent",
+        bgcolor: "#f3e5f5",
+        color: "#4a148c",
+        border: true,
+        borderColor: "#feebee",
       } as const;
   }
 }
@@ -262,13 +275,12 @@ const PROTOTYPE_PENDING_SENT_TO_FIX_BODY = "Chain was broken and one charm was m
 /** Status card detail under “Order status details” for cancelled (Figma 1544:6488). */
 const PROTOTYPE_CANCELLED_STATUS_BODY =
   "This shipment was cancelled. Do not pack or ship. Contact CSR if you need more information.";
-/** Status card detail for on hold (Figma 1664:19401). */
-const PROTOTYPE_ON_HOLD_STATUS_BODY =
-  "This shipment is on hold. Do not pack until the hold is released. Contact CSR if you need more information.";
-
-/** Next Order (prototype): sort → pack → pending → similar → packed → cancelled → (loops to sort). */
+/** On-hold status banner under Status row (Figma 2052:23611). */
+const ON_HOLD_AWAITING_ITEM_BODY = "This shipment is awaiting 1 item from Nazareth.";
+/** Next Order (prototype): sort → hold → pack → pending → similar → packed → cancelled → (loops to sort). */
 const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_SORT_STATION_ORDER_ID,
+  PROTOTYPE_ON_HOLD_ORDER_ID,
   PROTOTYPE_PACK_ORDER_ID,
   PROTOTYPE_PENDING_ORDER_ID,
   PROTOTYPE_SIMILAR_ORDERS_ORDER_ID,
@@ -646,6 +658,33 @@ function buildSplitShipmentCurrentItems(): JoinTransferItem[] {
   }));
 }
 
+/** When leaving on-hold, append any line items that were still at another facility (not yet in `packItems`). */
+function mergeMissingPackLineItems(prev: JoinTransferItem[]): JoinTransferItem[] {
+  const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
+  const have = new Set(prev.map((p) => p.id));
+  const missing = base.filter((b) => !have.has(b.id));
+  return missing.length ? [...prev, ...missing] : prev;
+}
+
+/** Prototype on-hold: line items physically at another site until marked received (Figma 2052:23611 / 1744:42531). */
+const PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS: readonly string[] = ["pack-item-1"];
+
+/** Label for the location chip on “other facilities” item cards (keyed by line item id). */
+const PROTOTYPE_REMOTE_FACILITY_LOCATION_BY_ITEM_ID: Record<string, string> = {
+  "pack-item-1": "Nazareth",
+  "pack-item-2": "Nazareth",
+  "pack-item-3": "Nazareth",
+};
+
+/** Hungary factory demo (header toggle): line 2 appears under “other facilities” without receive checkbox. */
+const HUNGARY_DEMO_OTHER_FACILITY_LINE_IDS: readonly string[] = ["pack-item-2"];
+
+/** Simulated barcode → container row after “scan” (Figma 2345:27263 / Location3). */
+const PROTOTYPE_CONTAINER_ASSIGN_CODE = "C.Y BOX 2606.KG";
+const PROTOTYPE_CONTAINER_ASSIGN_LOCATION = "שלייפ כניסה";
+
+type PrototypeContainerAssignDetail = { code: string; location: string };
+
 /** Remarks list timestamps (reference: 12/12/2026, 3:23 AM). */
 function formatRemarkRowDisplayTime(iso: string): string {
   const d = new Date(iso);
@@ -703,16 +742,6 @@ function buildInitialShipmentMessages(): ShipmentMessage[] {
         "Special requests: please make sure: Inscription #2: with 2 capital letters, sent picture before shipping.",
       itemId: "pack-item-1",
       itemLabel: PACK_LINE_ITEM_META[0].itemListLabel,
-    },
-    {
-      id: "seed-4",
-      at: "2024-12-10T19:48:00.000Z",
-      author: "Alexander.D",
-      senderRole: "packer",
-      channel: "packing",
-      body: "Gift note verified for item 3 — long message fits packing slip.",
-      itemId: "pack-item-3",
-      itemLabel: PACK_LINE_ITEM_META[2].itemListLabel,
     },
     {
       id: "seed-5",
@@ -2820,6 +2849,39 @@ function CarrierShippingRouteDialog({
   );
 }
 
+function OtherFacilityLocationChip({ label }: { label: string }) {
+  return (
+    <Chip
+      icon={<PlaceOutlinedIcon sx={{ fontSize: "18px !important", color: "text.primary" }} />}
+      label={label}
+      size="small"
+      sx={{
+        position: "absolute",
+        left: 16,
+        top: 0,
+        zIndex: 1,
+        transform: "translateY(-50%)",
+        height: 28,
+        pl: 0.5,
+        pr: 1,
+        fontWeight: 700,
+        fontSize: 14,
+        letterSpacing: "0.15px",
+        color: "text.primary",
+        bgcolor: "grey.200",
+        border: "1px solid",
+        borderColor: (theme) => alpha(theme.palette.common.black, 0.08),
+        "& .MuiChip-icon": {
+          ml: "6px",
+          mr: "-2px",
+          color: "text.primary",
+        },
+        "& .MuiChip-label": { px: 0.75 },
+      }}
+    />
+  );
+}
+
 export default function ReadyToPack() {
   const theme = useTheme();
   const [orderInput, setOrderInput] = useState("");
@@ -2852,12 +2914,24 @@ export default function ReadyToPack() {
   const [createRemarkDefaultItemId, setCreateRemarkDefaultItemId] = useState<string | null>(null);
   const [itemRemarksItemId, setItemRemarksItemId] = useState<string | null>(null);
   const [moreActionsMenuAnchor, setMoreActionsMenuAnchor] = useState<null | HTMLElement>(null);
+  const [onHoldStatusMenuAnchor, setOnHoldStatusMenuAnchor] = useState<null | HTMLElement>(null);
   const [packingOrderUiStatus, setPackingOrderUiStatus] = useState<PackingOrderUiStatus>("readyToPack");
   const [sentToFixReason, setSentToFixReason] = useState<string | null>(null);
   /** After OK/Cancel, hide the pending notice until `loadedOrderId` changes again. */
   const [pendingShipmentDialogDismissed, setPendingShipmentDialogDismissed] = useState(false);
   /** Prototype similar orders: which tab is active (Figma 2314:30804). */
   const [similarOrdersTabIndex, setSimilarOrdersTabIndex] = useState(0);
+  /** On-hold only: item IDs at another facility until Kiriyat Gat marks received (Figma 1744:42531). */
+  const [remoteFacilityItemIds, setRemoteFacilityItemIds] = useState<string[]>([]);
+  /** Line items marked received from another facility — rendered at bottom in this order, not in fixed meta slots. */
+  const [remoteReceivedPackOrder, setRemoteReceivedPackOrder] = useState<string[]>([]);
+  const [otherFacilitiesSectionExpanded, setOtherFacilitiesSectionExpanded] = useState(true);
+  /** Prototype: header profile toggles Hungary vs Kiryat Gat packing layout. */
+  const [prototypeFactorySiteView, setPrototypeFactorySiteView] = useState<"kiryatGat" | "hungary">("kiryatGat");
+  /** Figma 2345:27263 — per line item, container location after simulated scan. */
+  const [containerAssignByItemId, setContainerAssignByItemId] = useState<
+    Record<string, PrototypeContainerAssignDetail>
+  >({});
 
   const orderPacked = packingOrderUiStatus === "packed";
   const isPackActionsBlocked = isPackingStatusBlockingActions(packingOrderUiStatus);
@@ -2879,10 +2953,61 @@ export default function ReadyToPack() {
     isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.shipmentId : loadedOrderId ?? "";
   const packItemCount = packItems.length;
   const visiblePackItemIds = useMemo(() => new Set(packItems.map((i) => i.id)), [packItems]);
+  const showPackLine = (lineId: string) =>
+    visiblePackItemIds.has(lineId) && !remoteReceivedPackOrder.includes(lineId);
+  const showPackLine0 = showPackLine(PACK_LINE_ITEM_META[0].id);
+  const showPackLine1 = showPackLine(PACK_LINE_ITEM_META[1].id);
+  const showPackLine2 = showPackLine(PACK_LINE_ITEM_META[2].id);
+  const visibleRemoteReceivedIdsOrdered = useMemo(
+    () => remoteReceivedPackOrder.filter((rid) => visiblePackItemIds.has(rid)),
+    [remoteReceivedPackOrder, visiblePackItemIds],
+  );
   const extraPackItems = useMemo(
     () => packItems.filter((i) => !PACK_LINE_ITEM_META.some((meta) => meta.id === i.id)),
     [packItems],
   );
+
+  const hungaryFactoryDemoActive =
+    prototypeFactorySiteView === "hungary" &&
+    !isSimilarOrdersView &&
+    !isSortingStationView &&
+    packingOrderUiStatus !== "onHold" &&
+    packingOrderUiStatus !== "cancelled" &&
+    packingOrderUiStatus !== "pending";
+
+  const remoteFacilityIdsForUi = hungaryFactoryDemoActive
+    ? [...HUNGARY_DEMO_OTHER_FACILITY_LINE_IDS]
+    : remoteFacilityItemIds;
+
+  const showOtherFacilitiesSection =
+    !isSimilarOrdersView &&
+    remoteFacilityIdsForUi.length > 0 &&
+    (packingOrderUiStatus === "onHold" || hungaryFactoryDemoActive);
+
+  const showPackLine0Ui = hungaryFactoryDemoActive
+    ? visiblePackItemIds.has(PACK_LINE_ITEM_META[0].id) &&
+      !remoteReceivedPackOrder.includes(PACK_LINE_ITEM_META[0].id)
+    : showPackLine0;
+  const showPackLine1Ui = hungaryFactoryDemoActive ? false : showPackLine1;
+  const showPackLine2Ui = hungaryFactoryDemoActive ? false : showPackLine2;
+  const anyPrimaryPackLineVisibleUi = showPackLine0Ui || showPackLine1Ui || showPackLine2Ui;
+  const extraPackItemsUi = hungaryFactoryDemoActive ? [] : extraPackItems;
+  const packItemCountUi = hungaryFactoryDemoActive ? 1 : packItemCount;
+  const visibleRemoteReceivedIdsOrderedUi = hungaryFactoryDemoActive ? [] : visibleRemoteReceivedIdsOrdered;
+
+  const handleTogglePrototypeFactorySite = () => {
+    setPrototypeFactorySiteView((v) => {
+      if (v === "kiryatGat") {
+        setOtherFacilitiesSectionExpanded(false);
+        return "hungary";
+      }
+      if (packingOrderUiStatus === "onHold") {
+        setOtherFacilitiesSectionExpanded(true);
+      }
+      return "kiryatGat";
+    });
+  };
+
   /** Other similar-order tab: prefill join dialog source column when opening from the pair UI. */
   const joinPrefillSourceShipmentId = useMemo(() => {
     if (!isSimilarOrdersView || SIMILAR_ORDER_TABS.length < 2) return null;
@@ -2895,6 +3020,9 @@ export default function ReadyToPack() {
   const hidePackActionsUi = isPackActionsBlocked || isSortingStationView;
   const packingStatusChip = getPackingStatusChipConfig(packingOrderUiStatus, theme);
   const StatusChipIcon = packingStatusChip.Icon;
+  const readyToPackStatusChip = getPackingStatusChipConfig("readyToPack", theme);
+  const ReadyToPackStatusIcon = readyToPackStatusChip.Icon;
+  const onHoldStatusMenuOpen = Boolean(onHoldStatusMenuAnchor);
 
   const moreActionsMenuItems = orderPacked ? MORE_ACTIONS_MENU_ITEMS_PACKED : MORE_ACTIONS_MENU_ITEMS_DEFAULT;
 
@@ -2958,15 +3086,94 @@ export default function ReadyToPack() {
     setSendToFixDialogOpen(false);
     setJoinShipmentDialogOpen(false);
     setSplitShipmentDialogOpen(false);
-    setPackItems(buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false })));
     setShipmentMessages(buildInitialShipmentMessages());
     setRemarksTab("all");
     setCreateRemarkOpen(false);
     setCreateRemarkDefaultItemId(null);
     setItemRemarksItemId(null);
     setMoreActionsMenuAnchor(null);
+    setOnHoldStatusMenuAnchor(null);
     setSimilarOrdersTabIndex(0);
+    setPrototypeFactorySiteView("kiryatGat");
+    const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
+    if (isOnHoldProto) {
+      setRemoteFacilityItemIds([...PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS]);
+      setPackItems(base.filter((i) => !PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS.includes(i.id)));
+      setRemoteReceivedPackOrder([]);
+      setOtherFacilitiesSectionExpanded(true);
+    } else {
+      setRemoteFacilityItemIds([]);
+      setRemoteReceivedPackOrder([]);
+      setPackItems(base);
+    }
+    setContainerAssignByItemId({});
   }, [loadedOrderId]);
+
+  const handleContainerAssignSimulate = (assignItemId: string) => {
+    setContainerAssignByItemId((prev) => ({
+      ...prev,
+      [assignItemId]: { code: PROTOTYPE_CONTAINER_ASSIGN_CODE, location: PROTOTYPE_CONTAINER_ASSIGN_LOCATION },
+    }));
+  };
+
+  const handleContainerAssignClear = (assignItemId: string) => {
+    setContainerAssignByItemId((prev) => {
+      const next = { ...prev };
+      delete next[assignItemId];
+      return next;
+    });
+  };
+
+  const handleRemoteFacilityItemReceived = (itemId: string) => {
+    const full = buildSplitShipmentCurrentItems().find((i) => i.id === itemId);
+    if (!full) return;
+    setPackItems((prev) => {
+      if (prev.some((i) => i.id === itemId)) return prev;
+      return [...prev, { ...full, movable: false }];
+    });
+    setRemoteReceivedPackOrder((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
+    setRemoteFacilityItemIds((prev) => prev.filter((id) => id !== itemId));
+  };
+
+  const handleRemoteFacilityReceivedChange = (itemId: string, checked: boolean) => {
+    if (!PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS.includes(itemId)) return;
+    if (checked) {
+      handleRemoteFacilityItemReceived(itemId);
+      return;
+    }
+    setRemoteReceivedPackOrder((prev) => prev.filter((id) => id !== itemId));
+    if (packingOrderUiStatus === "onHold") {
+      const full = buildSplitShipmentCurrentItems().find((i) => i.id === itemId);
+      if (!full) return;
+      setPackItems((prev) => prev.filter((p) => p.id !== itemId));
+      setRemoteFacilityItemIds((prev) => (prev.includes(itemId) ? prev : [...prev, itemId]));
+    }
+  };
+
+  const remoteFacilityItemReceivedControl = (itemId: string): ReactNode => {
+    if (prototypeFactorySiteView === "hungary") return null;
+    if (!isPrototypeOnHoldOrderId(loadedOrderId)) return null;
+    if (!PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS.includes(itemId)) return null;
+    return (
+      <FormControlLabel
+        control={
+          <Checkbox
+            size="small"
+            color="info"
+            checked={remoteReceivedPackOrder.includes(itemId)}
+            onChange={(_, checked) => handleRemoteFacilityReceivedChange(itemId, checked)}
+            sx={{ py: 0.5 }}
+          />
+        }
+        label={
+          <Typography variant="body1" sx={{ fontSize: 16, letterSpacing: "0.15px" }}>
+            Item Received
+          </Typography>
+        }
+        sx={{ m: 0, mr: 0, gap: 0.5, alignItems: "center" }}
+      />
+    );
+  };
 
   const openCreateRemarkDialog = (defaultItemId: string | null) => {
     setCreateRemarkDefaultItemId(defaultItemId);
@@ -3221,19 +3428,33 @@ export default function ReadyToPack() {
               </IconButton>
             </Tooltip>
             <Divider orientation="vertical" flexItem sx={{ height: 40, borderColor: "divider" }} />
-            <Stack direction="row" alignItems="center" spacing={1}>
-              <IconButton sx={{ p: 0 }} aria-label="Account">
+            <ButtonBase
+              onClick={handleTogglePrototypeFactorySite}
+              sx={{
+                borderRadius: 1,
+                px: 0.5,
+                py: 0.25,
+                textAlign: "left",
+                color: "inherit",
+              }}
+              aria-label={
+                prototypeFactorySiteView === "hungary"
+                  ? "Switch to Kiryat Gat factory view"
+                  : "Switch to Hungary factory view"
+              }
+            >
+              <Stack direction="row" alignItems="center" spacing={1}>
                 <Avatar sx={{ width: 32, height: 32, bgcolor: "#90a4ae", fontSize: 12 }}>JD</Avatar>
-              </IconButton>
-              <Stack sx={{ minWidth: 0 }}>
-                <Typography variant="body2" fontWeight={500} textAlign="left">
-                  John
-                </Typography>
-                <Typography variant="caption" color="text.secondary" textAlign="left">
-                  Kiryat Gat
-                </Typography>
+                <Stack sx={{ minWidth: 0 }}>
+                  <Typography variant="body2" fontWeight={500} textAlign="left">
+                    {prototypeFactorySiteView === "hungary" ? "James" : "John"}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary" textAlign="left">
+                    {prototypeFactorySiteView === "hungary" ? "Hungary" : "Kiryat Gat"}
+                  </Typography>
+                </Stack>
               </Stack>
-            </Stack>
+            </ButtonBase>
           </Stack>
         </Toolbar>
       </AppBar>
@@ -3521,10 +3742,10 @@ export default function ReadyToPack() {
           justifyContent="center"
           sx={{ width: "100%", maxWidth: 1600 }}
         >
+          <Stack spacing={3} sx={{ flex: "1 1 0%", minWidth: 0, width: "100%" }}>
           <Paper
             elevation={1}
             sx={{
-              flex: "1 1 0%",
               minWidth: 0,
               width: "100%",
               p: 3,
@@ -3540,10 +3761,10 @@ export default function ReadyToPack() {
               flexWrap="wrap"
               useFlexGap
               spacing={2}
-              sx={{ mb: 2 }}
+              sx={{ mb: 0 }}
             >
               <Typography variant="h6" sx={{ color: "primary.dark", flexShrink: 0 }}>
-                Items to Pack ({packItemCount})
+                Items to Pack ({packItemCountUi})
               </Typography>
               {isSimilarOrdersView ? (
                 <Tabs
@@ -3602,16 +3823,21 @@ export default function ReadyToPack() {
                 </Stack>
               ) : null}
             </Stack>
-            <Divider sx={{ mb: 2 }} />
+            <Divider sx={{ my: 3 }} />
 
-            {visiblePackItemIds.has(PACK_LINE_ITEM_META[0].id) ? (
+            {showPackLine0Ui ? (
               <ItemBlock
+                showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                containerAssignByItemId={containerAssignByItemId}
+                onContainerAssignSimulate={handleContainerAssignSimulate}
+                onContainerAssignClear={handleContainerAssignClear}
                 title={PACK_LINE_ITEM_META[0].title}
                 image={IMG.item1}
                 imageRadius={1}
                 itemId={PACK_LINE_ITEM_META[0].id}
                 itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[0].id] ?? 0}
                 onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[0].id)}
+                titleRowEnd={remoteFacilityItemReceivedControl(PACK_LINE_ITEM_META[0].id) ?? undefined}
                 details={
                   <>
                     <SectionOverline>Details</SectionOverline>
@@ -3645,102 +3871,116 @@ export default function ReadyToPack() {
               />
             ) : null}
 
-            <Divider sx={{ my: 2 }} />
-
-            {visiblePackItemIds.has(PACK_LINE_ITEM_META[1].id) ? (
-              <ItemBlock
-              title={PACK_LINE_ITEM_META[1].title}
-              image={IMG.item2}
-              imageOverlay
-              itemId={PACK_LINE_ITEM_META[1].id}
-              itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[1].id] ?? 0}
-              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[1].id)}
-              details={
-                <>
-                  <SectionOverline>Details</SectionOverline>
-                  <DetailRow label="Material:" value="18K Gold Vermeil" />
-                  <DetailRow label="Diamond:" value="With Diamond" />
-                  <DetailRow label="Inscription #1:" value="Stacy" />
-                  <DetailRow label="Inscription #2:" value="John" />
-                  <DetailRow label="Carat Weight:" value=".25 ct" />
-                  <DetailRow label="Chain Length:" value={'18" - 22"'} />
-                </>
-              }
-              packaging={
-                <>
-                  <SectionOverline>packaging type</SectionOverline>
-                  <Stack direction="row" spacing={1.5}>
-                    <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                      Box:
-                    </Typography>
-                    <Typography variant="body1" fontWeight={500}>
-                      Small
-                    </Typography>
-                  </Stack>
-                  <Box
-                    sx={{
-                      width: 140,
-                      height: 140,
-                      borderRadius: 0.5,
-                      overflow: "hidden",
-                      position: "relative",
-                      bgcolor: "#eeeff1",
-                    }}
-                  >
-                    <Box
-                      component="img"
-                      src={IMG.boxSmall}
-                      alt=""
-                      sx={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  </Box>
-                </>
-              }
-              />
-            ) : null}
-
-            <Divider sx={{ my: 2 }} />
-
-            {visiblePackItemIds.has(PACK_LINE_ITEM_META[2].id) ? (
-              <ItemBlock
-              title={PACK_LINE_ITEM_META[2].title}
-              image={IMG.item3}
-              imageOverlay
-              itemId={PACK_LINE_ITEM_META[2].id}
-              itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[2].id] ?? 0}
-              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[2].id)}
-              details={
-                <>
-                  <SectionOverline>Details</SectionOverline>
-                  <DetailRow label="Name:" value="Stephanie" />
-                  <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ width: "100%" }}>
-                    <Typography variant="body1" color="text.secondary" sx={{ width: 120, flexShrink: 0 }}>
-                      Gift Note:
-                    </Typography>
-                    <Typography
-                      variant="body1"
-                      fontWeight={500}
-                      color="text.primary"
-                      sx={{ flex: "1 1 0", minWidth: 0, wordBreak: "break-word" }}
-                    >
-                      To my beloved wife, every piece of jewelry tells a story, and this one is a reminder of our
-                      beautiful journey together. I love you more than words can express. Forever yours.
-                    </Typography>
-                  </Stack>
-                </>
-              }
-              packaging={null}
-              />
-            ) : null}
-
-            {extraPackItems.map((item) => (
-              <Box key={item.id}>
-                <Divider sx={{ my: 2 }} />
+            {showPackLine1Ui ? (
+              <Fragment>
+                {showPackLine0Ui ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
+                  showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                  containerAssignByItemId={containerAssignByItemId}
+                  onContainerAssignSimulate={handleContainerAssignSimulate}
+                  onContainerAssignClear={handleContainerAssignClear}
+                  title={PACK_LINE_ITEM_META[1].title}
+                  image={IMG.item2}
+                  imageOverlay
+                  itemId={PACK_LINE_ITEM_META[1].id}
+                  itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[1].id] ?? 0}
+                  onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[1].id)}
+                  details={
+                    <>
+                      <SectionOverline>Details</SectionOverline>
+                      <DetailRow label="Material:" value="18K Gold Vermeil" />
+                      <DetailRow label="Diamond:" value="With Diamond" />
+                      <DetailRow label="Inscription #1:" value="Stacy" />
+                      <DetailRow label="Inscription #2:" value="John" />
+                      <DetailRow label="Carat Weight:" value=".25 ct" />
+                      <DetailRow label="Chain Length:" value={'18" - 22"'} />
+                    </>
+                  }
+                  packaging={
+                    <>
+                      <SectionOverline>packaging type</SectionOverline>
+                      <Stack direction="row" spacing={1.5}>
+                        <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
+                          Box:
+                        </Typography>
+                        <Typography variant="body1" fontWeight={500}>
+                          Small
+                        </Typography>
+                      </Stack>
+                      <Box
+                        sx={{
+                          width: 140,
+                          height: 140,
+                          borderRadius: 0.5,
+                          overflow: "hidden",
+                          position: "relative",
+                          bgcolor: "#eeeff1",
+                        }}
+                      >
+                        <Box
+                          component="img"
+                          src={IMG.boxSmall}
+                          alt=""
+                          sx={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                          }}
+                        />
+                      </Box>
+                    </>
+                  }
+                />
+              </Fragment>
+            ) : null}
+
+            {showPackLine2Ui ? (
+              <Fragment>
+                {(showPackLine0Ui || showPackLine1Ui) ? <Divider sx={{ my: 3 }} /> : null}
+                <ItemBlock
+                  showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                  containerAssignByItemId={containerAssignByItemId}
+                  onContainerAssignSimulate={handleContainerAssignSimulate}
+                  onContainerAssignClear={handleContainerAssignClear}
+                  title={PACK_LINE_ITEM_META[2].title}
+                  image={IMG.item3}
+                  imageOverlay
+                  itemId={PACK_LINE_ITEM_META[2].id}
+                  itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[2].id] ?? 0}
+                  onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[2].id)}
+                  details={
+                    <>
+                      <SectionOverline>Details</SectionOverline>
+                      <DetailRow label="Name:" value="Stephanie" />
+                      <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ width: "100%" }}>
+                        <Typography variant="body1" color="text.secondary" sx={{ width: 120, flexShrink: 0 }}>
+                          Gift Note:
+                        </Typography>
+                        <Typography
+                          variant="body1"
+                          fontWeight={500}
+                          color="text.primary"
+                          sx={{ flex: "1 1 0", minWidth: 0, wordBreak: "break-word" }}
+                        >
+                          To my beloved wife, every piece of jewelry tells a story, and this one is a reminder of our
+                          beautiful journey together. I love you more than words can express. Forever yours.
+                        </Typography>
+                      </Stack>
+                    </>
+                  }
+                  packaging={null}
+                />
+              </Fragment>
+            ) : null}
+
+            {extraPackItemsUi.map((item, extraIdx) => (
+              <Box key={item.id}>
+                {(anyPrimaryPackLineVisibleUi || extraIdx > 0) ? <Divider sx={{ my: 3 }} /> : null}
+                <ItemBlock
+                  showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                  containerAssignByItemId={containerAssignByItemId}
+                  onContainerAssignSimulate={handleContainerAssignSimulate}
+                  onContainerAssignClear={handleContainerAssignClear}
                   title={item.title}
                   image={item.image}
                   itemId={item.id}
@@ -3757,11 +3997,173 @@ export default function ReadyToPack() {
               </Box>
             ))}
 
+            {visibleRemoteReceivedIdsOrderedUi.map((rid, remoteIdx) => {
+              const showRemoteLeadDivider =
+                anyPrimaryPackLineVisibleUi || extraPackItemsUi.length > 0 || remoteIdx > 0;
+              if (rid === PACK_LINE_ITEM_META[0].id) {
+                const remoteReceivedItemCheckbox = remoteFacilityItemReceivedControl(rid);
+                return (
+                  <Box key={`remote-received-${rid}`}>
+                    {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
+                    <ItemBlock
+                      showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                      remoteFacilityTitleRow={remoteReceivedItemCheckbox != null}
+                      containerAssignByItemId={containerAssignByItemId}
+                      onContainerAssignSimulate={handleContainerAssignSimulate}
+                      onContainerAssignClear={handleContainerAssignClear}
+                      title={PACK_LINE_ITEM_META[0].title}
+                      image={IMG.item1}
+                      imageRadius={1}
+                      itemId={PACK_LINE_ITEM_META[0].id}
+                      itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[0].id] ?? 0}
+                      onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[0].id)}
+                      titleRowEnd={remoteReceivedItemCheckbox ?? undefined}
+                      details={
+                        <>
+                          <SectionOverline>Details</SectionOverline>
+                          <DetailRow label="Inscription #1:" value="Jane" />
+                          <DetailRow label="Inscription #2:" value="Kelsey" />
+                          <DetailRow label="Inscription #3:" value="Tiffany" />
+                          <DetailRow label="Material:" value="18K Rose Gold Vermeil" />
+                          <DetailRow label="Diamond:" value="Without Diamond" />
+                          <DetailRow label="Size:" value={'18" - 22"'} />
+                        </>
+                      }
+                      packaging={
+                        <>
+                          <SectionOverline>packaging type</SectionOverline>
+                          <Stack direction="row" spacing={3}>
+                            <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
+                              Box:
+                            </Typography>
+                            <Typography variant="body1" fontWeight={500}>
+                              Medium
+                            </Typography>
+                          </Stack>
+                          <Box
+                            component="img"
+                            src={IMG.boxMedium}
+                            alt=""
+                            sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
+                          />
+                        </>
+                      }
+                    />
+                  </Box>
+                );
+              }
+              if (rid === PACK_LINE_ITEM_META[1].id) {
+                return (
+                  <Box key={`remote-received-${rid}`}>
+                    {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
+                    <ItemBlock
+                      showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                      containerAssignByItemId={containerAssignByItemId}
+                      onContainerAssignSimulate={handleContainerAssignSimulate}
+                      onContainerAssignClear={handleContainerAssignClear}
+                      title={PACK_LINE_ITEM_META[1].title}
+                      image={IMG.item2}
+                      imageOverlay
+                      itemId={PACK_LINE_ITEM_META[1].id}
+                      itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[1].id] ?? 0}
+                      onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[1].id)}
+                      details={
+                        <>
+                          <SectionOverline>Details</SectionOverline>
+                          <DetailRow label="Material:" value="18K Gold Vermeil" />
+                          <DetailRow label="Diamond:" value="With Diamond" />
+                          <DetailRow label="Inscription #1:" value="Stacy" />
+                          <DetailRow label="Inscription #2:" value="John" />
+                          <DetailRow label="Carat Weight:" value=".25 ct" />
+                          <DetailRow label="Chain Length:" value={'18" - 22"'} />
+                        </>
+                      }
+                      packaging={
+                        <>
+                          <SectionOverline>packaging type</SectionOverline>
+                          <Stack direction="row" spacing={1.5}>
+                            <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
+                              Box:
+                            </Typography>
+                            <Typography variant="body1" fontWeight={500}>
+                              Small
+                            </Typography>
+                          </Stack>
+                          <Box
+                            sx={{
+                              width: 140,
+                              height: 140,
+                              borderRadius: 0.5,
+                              overflow: "hidden",
+                              position: "relative",
+                              bgcolor: "#eeeff1",
+                            }}
+                          >
+                            <Box
+                              component="img"
+                              src={IMG.boxSmall}
+                              alt=""
+                              sx={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "cover",
+                              }}
+                            />
+                          </Box>
+                        </>
+                      }
+                    />
+                  </Box>
+                );
+              }
+              if (rid === PACK_LINE_ITEM_META[2].id) {
+                return (
+                  <Box key={`remote-received-${rid}`}>
+                    {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
+                    <ItemBlock
+                      showHoldAssignDefault={packingOrderUiStatus === "onHold"}
+                      containerAssignByItemId={containerAssignByItemId}
+                      onContainerAssignSimulate={handleContainerAssignSimulate}
+                      onContainerAssignClear={handleContainerAssignClear}
+                      title={PACK_LINE_ITEM_META[2].title}
+                      image={IMG.item3}
+                      imageOverlay
+                      itemId={PACK_LINE_ITEM_META[2].id}
+                      itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[2].id] ?? 0}
+                      onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[2].id)}
+                      details={
+                        <>
+                          <SectionOverline>Details</SectionOverline>
+                          <DetailRow label="Name:" value="Stephanie" />
+                          <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ width: "100%" }}>
+                            <Typography variant="body1" color="text.secondary" sx={{ width: 120, flexShrink: 0 }}>
+                              Gift Note:
+                            </Typography>
+                            <Typography
+                              variant="body1"
+                              fontWeight={500}
+                              color="text.primary"
+                              sx={{ flex: "1 1 0", minWidth: 0, wordBreak: "break-word" }}
+                            >
+                              To my beloved wife, every piece of jewelry tells a story, and this one is a reminder of
+                              our beautiful journey together. I love you more than words can express. Forever yours.
+                            </Typography>
+                          </Stack>
+                        </>
+                      }
+                      packaging={null}
+                    />
+                  </Box>
+                );
+              }
+              return null;
+            })}
+
             {!isSortingStationView &&
             packingOrderUiStatus !== "cancelled" &&
             packingOrderUiStatus !== "onHold" ? (
               <>
-                <Divider sx={{ my: 2 }} />
+                <Divider sx={{ my: 3 }} />
                 <Stack
                   direction="row"
                   alignItems="center"
@@ -3781,7 +4183,7 @@ export default function ReadyToPack() {
                     }
                     label={
                       <Typography variant="h6" sx={{ color: "primary.dark", fontSize: 20, fontWeight: 500 }}>
-                        I reviewed and packed {packItemCount} items
+                        I reviewed and packed {packItemCountUi} items
                       </Typography>
                     }
                     sx={{
@@ -3797,6 +4199,234 @@ export default function ReadyToPack() {
               </>
             ) : null}
           </Paper>
+
+            {showOtherFacilitiesSection ? (
+              <Paper
+                elevation={1}
+                data-node-id="2052:23611;1744:42418"
+                sx={{
+                  minWidth: 0,
+                  width: "100%",
+                  p: 3,
+                  boxSizing: "border-box",
+                  borderRadius: 1,
+                  ...elevationSx,
+                }}
+              >
+                <Stack
+                  spacing={2}
+                  sx={{
+                    height: "fit-content",
+                    "& > .MuiButtonBase-root ~ .MuiCollapse-root": { mt: 0 },
+                  }}
+                >
+                  <ButtonBase
+                    focusRipple
+                    onClick={() => setOtherFacilitiesSectionExpanded((open) => !open)}
+                    aria-expanded={otherFacilitiesSectionExpanded}
+                    sx={{
+                      display: "flex",
+                      width: "100%",
+                      justifyContent: "flex-start",
+                      alignItems: "center",
+                      gap: 2,
+                      py: 0,
+                      px: 0,
+                      borderRadius: 1,
+                      textAlign: "left",
+                    }}
+                  >
+                    <ExpandMoreIcon
+                      sx={{
+                        color: "primary.dark",
+                        fontSize: 24,
+                        transform: otherFacilitiesSectionExpanded ? "rotate(0deg)" : "rotate(-90deg)",
+                        transition: (theme) =>
+                          theme.transitions.create("transform", { duration: theme.transitions.duration.shorter }),
+                      }}
+                    />
+                    <Typography variant="h6" sx={{ color: "primary.dark", fontWeight: 500 }}>
+                      Items in Other Facilities ({remoteFacilityIdsForUi.length})
+                    </Typography>
+                  </ButtonBase>
+                  <Collapse in={otherFacilitiesSectionExpanded}>
+                    <Stack spacing={3} sx={{ pt: "32px" }}>
+                      {remoteFacilityIdsForUi.map((remoteLineId) => (
+                        <Box
+                          key={remoteLineId}
+                          sx={{
+                            position: "relative",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                            px: 3,
+                            py: 4,
+                            boxSizing: "border-box",
+                          }}
+                        >
+                          <OtherFacilityLocationChip
+                            label={
+                              PROTOTYPE_REMOTE_FACILITY_LOCATION_BY_ITEM_ID[remoteLineId] ?? "Other facility"
+                            }
+                          />
+                          {remoteLineId === PACK_LINE_ITEM_META[0].id ? (
+                            <ItemBlock
+                              showHoldAssignDefault={false}
+                              remoteFacilityTitleRow
+                              containerAssignByItemId={containerAssignByItemId}
+                              onContainerAssignSimulate={handleContainerAssignSimulate}
+                              onContainerAssignClear={handleContainerAssignClear}
+                              title={PACK_LINE_ITEM_META[0].title}
+                              image={IMG.item1}
+                              imageRadius={1}
+                              itemId={PACK_LINE_ITEM_META[0].id}
+                              itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[0].id] ?? 0}
+                              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[0].id)}
+                              titleRowEnd={
+                                remoteFacilityItemReceivedControl(PACK_LINE_ITEM_META[0].id) ?? undefined
+                              }
+                              details={
+                                <>
+                                  <SectionOverline>Details</SectionOverline>
+                                  <DetailRow label="Inscription #1:" value="Jane" />
+                                  <DetailRow label="Inscription #2:" value="Kelsey" />
+                                  <DetailRow label="Inscription #3:" value="Tiffany" />
+                                  <DetailRow label="Material:" value="18K Rose Gold Vermeil" />
+                                  <DetailRow label="Diamond:" value="Without Diamond" />
+                                  <DetailRow label="Size:" value={'18" - 22"'} />
+                                </>
+                              }
+                              packaging={
+                                <>
+                                  <SectionOverline>packaging type</SectionOverline>
+                                  <Stack direction="row" spacing={3}>
+                                    <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
+                                      Box:
+                                    </Typography>
+                                    <Typography variant="body1" fontWeight={500}>
+                                      Medium
+                                    </Typography>
+                                  </Stack>
+                                  <Box
+                                    component="img"
+                                    src={IMG.boxMedium}
+                                    alt=""
+                                    sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
+                                  />
+                                </>
+                              }
+                            />
+                          ) : null}
+                          {remoteLineId === PACK_LINE_ITEM_META[1].id ? (
+                            <ItemBlock
+                              showHoldAssignDefault={false}
+                              containerAssignByItemId={containerAssignByItemId}
+                              onContainerAssignSimulate={handleContainerAssignSimulate}
+                              onContainerAssignClear={handleContainerAssignClear}
+                              title={PACK_LINE_ITEM_META[1].title}
+                              image={IMG.item2}
+                              imageOverlay
+                              itemId={PACK_LINE_ITEM_META[1].id}
+                              itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[1].id] ?? 0}
+                              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[1].id)}
+                              titleRowEnd={
+                                remoteFacilityItemReceivedControl(PACK_LINE_ITEM_META[1].id) ?? undefined
+                              }
+                              details={
+                                <>
+                                  <SectionOverline>Details</SectionOverline>
+                                  <DetailRow label="Material:" value="18K Gold Vermeil" />
+                                  <DetailRow label="Diamond:" value="With Diamond" />
+                                  <DetailRow label="Inscription #1:" value="Stacy" />
+                                  <DetailRow label="Inscription #2:" value="John" />
+                                  <DetailRow label="Carat Weight:" value=".25 ct" />
+                                  <DetailRow label="Chain Length:" value={'18" - 22"'} />
+                                </>
+                              }
+                              packaging={
+                                <>
+                                  <SectionOverline>packaging type</SectionOverline>
+                                  <Stack direction="row" spacing={1.5}>
+                                    <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
+                                      Box:
+                                    </Typography>
+                                    <Typography variant="body1" fontWeight={500}>
+                                      Small
+                                    </Typography>
+                                  </Stack>
+                                  <Box
+                                    sx={{
+                                      width: 140,
+                                      height: 140,
+                                      borderRadius: 0.5,
+                                      overflow: "hidden",
+                                      position: "relative",
+                                      bgcolor: "#eeeff1",
+                                    }}
+                                  >
+                                    <Box
+                                      component="img"
+                                      src={IMG.boxSmall}
+                                      alt=""
+                                      sx={{
+                                        width: "100%",
+                                        height: "100%",
+                                        objectFit: "cover",
+                                      }}
+                                    />
+                                  </Box>
+                                </>
+                              }
+                            />
+                          ) : null}
+                          {remoteLineId === PACK_LINE_ITEM_META[2].id ? (
+                            <ItemBlock
+                              showHoldAssignDefault={false}
+                              remoteFacilityTitleRow
+                              containerAssignByItemId={containerAssignByItemId}
+                              onContainerAssignSimulate={handleContainerAssignSimulate}
+                              onContainerAssignClear={handleContainerAssignClear}
+                              title={PACK_LINE_ITEM_META[2].title}
+                              image={IMG.item3}
+                              imageOverlay
+                              itemId={PACK_LINE_ITEM_META[2].id}
+                              itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[2].id] ?? 0}
+                              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[2].id)}
+                              titleRowEnd={
+                                remoteFacilityItemReceivedControl(PACK_LINE_ITEM_META[2].id) ?? undefined
+                              }
+                              details={
+                                <>
+                                  <SectionOverline>Details</SectionOverline>
+                                  <DetailRow label="Name:" value="Stephanie" />
+                                  <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ width: "100%" }}>
+                                    <Typography variant="body1" color="text.secondary" sx={{ width: 120, flexShrink: 0 }}>
+                                      Gift Note:
+                                    </Typography>
+                                    <Typography
+                                      variant="body1"
+                                      fontWeight={500}
+                                      color="text.primary"
+                                      sx={{ flex: "1 1 0", minWidth: 0, wordBreak: "break-word" }}
+                                    >
+                                      To my beloved wife, every piece of jewelry tells a story, and this one is a
+                                      reminder of our beautiful journey together. I love you more than words can express.
+                                      Forever yours.
+                                    </Typography>
+                                  </Stack>
+                                </>
+                              }
+                              packaging={null}
+                            />
+                          ) : null}
+                        </Box>
+                      ))}
+                    </Stack>
+                  </Collapse>
+                </Stack>
+              </Paper>
+            ) : null}
+          </Stack>
 
           <Box
             sx={{
@@ -3855,6 +4485,21 @@ export default function ReadyToPack() {
                       />
                     }
                     label={packingStatusChip.label}
+                    onClick={
+                      packingOrderUiStatus === "onHold"
+                        ? (e) => setOnHoldStatusMenuAnchor(e.currentTarget)
+                        : undefined
+                    }
+                    onDelete={
+                      packingOrderUiStatus === "onHold"
+                        ? (e) => setOnHoldStatusMenuAnchor(e.currentTarget as HTMLElement)
+                        : undefined
+                    }
+                    deleteIcon={
+                      packingOrderUiStatus === "onHold" ? (
+                        <ExpandMoreIcon sx={{ color: `${packingStatusChip.color} !important` }} />
+                      ) : undefined
+                    }
                     sx={{
                       bgcolor: packingStatusChip.bgcolor,
                       color: packingStatusChip.color,
@@ -3875,9 +4520,107 @@ export default function ReadyToPack() {
                         width: packingStatusChip.iconSize,
                         height: packingStatusChip.iconSize,
                       },
+                      "& .MuiChip-deleteIcon": {
+                        mr: 0.5,
+                        ml: 0.5,
+                        fontSize: 20,
+                      },
+                      cursor: packingOrderUiStatus === "onHold" ? "pointer" : "default",
+                      ...(packingOrderUiStatus === "onHold"
+                        ? {
+                            "&.MuiChip-clickable:hover": {
+                              bgcolor: purple[100],
+                              borderColor: packingStatusChip.borderColor,
+                            },
+                            "&.MuiChip-clickable:focus": {
+                              bgcolor: purple[100],
+                            },
+                          }
+                        : {}),
                     }}
                   />
+                  <Menu
+                    anchorEl={onHoldStatusMenuAnchor}
+                    open={onHoldStatusMenuOpen}
+                    onClose={() => setOnHoldStatusMenuAnchor(null)}
+                    anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                    transformOrigin={{ vertical: "top", horizontal: "right" }}
+                    PaperProps={{
+                      sx: {
+                        mt: 0.5,
+                        minWidth: 190,
+                        borderRadius: 1,
+                      },
+                    }}
+                  >
+                    <MenuItem
+                      onClick={() => {
+                        setPackingOrderUiStatus("readyToPack");
+                        setOnHoldStatusMenuAnchor(null);
+                        if (isPrototypeOnHoldOrderId(loadedOrderId)) {
+                          setRemoteFacilityItemIds([]);
+                          setPackItems((prev) => mergeMissingPackLineItems(prev));
+                        }
+                      }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 40 }}>
+                        <ReadyToPackStatusIcon
+                          sx={{
+                            color: `${readyToPackStatusChip.color} !important`,
+                            fontSize: readyToPackStatusChip.iconSize,
+                            width: readyToPackStatusChip.iconSize,
+                            height: readyToPackStatusChip.iconSize,
+                          }}
+                        />
+                      </ListItemIcon>
+                      Ready to Pack
+                    </MenuItem>
+                  </Menu>
                 </Stack>
+                {packingOrderUiStatus === "onHold" ? (
+                  <Alert
+                    data-node-id="2052:23611"
+                    severity="info"
+                    variant="standard"
+                    icon={<InfoOutlinedIcon sx={{ fontSize: 22, color: "#4a148c" }} />}
+                    sx={{
+                      alignItems: "flex-start",
+                      py: 0.75,
+                      px: 2,
+                      borderRadius: 1,
+                      border: "none",
+                      boxShadow: "none",
+                      bgcolor: "#f3e5f5",
+                      color: "#4a148c",
+                      "& .MuiAlert-icon": {
+                        color: "#4a148c",
+                        alignSelf: "flex-start",
+                        mr: 1.5,
+                        py: 0.875,
+                        opacity: 1,
+                      },
+                      "& .MuiAlert-message": {
+                        width: "100%",
+                        pt: 1,
+                        pb: 1,
+                        color: "#4a148c",
+                      },
+                    }}
+                  >
+                    <Typography
+                      variant="body2"
+                      sx={{
+                        fontWeight: 500,
+                        fontSize: 14,
+                        lineHeight: 1.43,
+                        letterSpacing: "0.15px",
+                        color: "#4a148c",
+                      }}
+                    >
+                      {ON_HOLD_AWAITING_ITEM_BODY}
+                    </Typography>
+                  </Alert>
+                ) : null}
                 {isSimilarOrdersView ? (
                   <>
                     <Divider />
@@ -3996,51 +4739,6 @@ export default function ReadyToPack() {
                         }}
                       >
                         {PROTOTYPE_CANCELLED_STATUS_BODY}
-                      </Typography>
-                    </Alert>
-                  </>
-                ) : null}
-                {packingOrderUiStatus === "onHold" ? (
-                  <>
-                    <Divider />
-                    <Alert
-                      severity="info"
-                      variant="standard"
-                      icon={<PauseCircleOutlineIcon />}
-                      sx={{
-                        alignItems: "flex-start",
-                        py: 1.5,
-                        px: 2,
-                        borderRadius: 1,
-                        border: "none",
-                        boxShadow: "none",
-                        bgcolor: "#eceff1",
-                        color: "#37474f",
-                        "& .MuiAlert-icon": { color: "#546e7a" },
-                        "& .MuiAlert-message": { width: "100%", pt: 0.125, color: "#37474f" },
-                      }}
-                    >
-                      <AlertTitle
-                        sx={{
-                          fontWeight: 600,
-                          fontSize: 16,
-                          color: "#37474f",
-                          mb: 0.5,
-                          letterSpacing: "0.15px",
-                        }}
-                      >
-                        Order status details
-                      </AlertTitle>
-                      <Typography
-                        variant="body2"
-                        sx={{
-                          letterSpacing: "0.15px",
-                          whiteSpace: "pre-wrap",
-                          lineHeight: 1.5,
-                          color: "#37474f",
-                        }}
-                      >
-                        {PROTOTYPE_ON_HOLD_STATUS_BODY}
                       </Typography>
                     </Alert>
                   </>
@@ -4178,11 +4876,12 @@ export default function ReadyToPack() {
                     }}
                   >
                     {trackingManualMode
-                      ? `manual pack ${packItemCount} items`
-                      : `pack ${packItemCount} items`}
+                      ? `manual pack ${packItemCountUi} items`
+                      : `pack ${packItemCountUi} items`}
                   </Button>
+                  {(!hungaryFactoryDemoActive || orderPacked) ? (
                   <Stack direction="row" spacing={1}>
-                    {!orderPacked && (
+                    {!orderPacked && !hungaryFactoryDemoActive ? (
                       <Button
                         fullWidth
                         variant="outlined"
@@ -4204,7 +4903,7 @@ export default function ReadyToPack() {
                       >
                         send to fix
                       </Button>
-                    )}
+                    ) : null}
                     <Button
                       fullWidth
                       variant="outlined"
@@ -4285,6 +4984,7 @@ export default function ReadyToPack() {
                       ))}
                     </Menu>
                   </Stack>
+                  ) : null}
                 </Stack>
               </Paper>
             )}
@@ -4383,6 +5083,208 @@ export default function ReadyToPack() {
   );
 }
 
+/** Figma 1664:18638 default + 2345:27263 assigned (Location3): scan / container + location + clear. */
+function ItemHoldAssignContainer({
+  assigned,
+  onSimulateScan,
+  onClear,
+}: {
+  assigned: PrototypeContainerAssignDetail | null;
+  onSimulateScan: () => void;
+  onClear: () => void;
+}) {
+  const labelColumn = (
+    <Box
+      sx={{
+        bgcolor: "grey.200",
+        px: 2,
+        py: 0.5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        alignSelf: "stretch",
+      }}
+    >
+      <Typography
+        sx={{
+          fontWeight: 500,
+          fontSize: 14,
+          lineHeight: 1.5,
+          letterSpacing: "0.15px",
+          color: "grey.900",
+          whiteSpace: "nowrap",
+        }}
+      >
+        Container
+      </Typography>
+    </Box>
+  );
+
+  if (assigned != null) {
+    return (
+      <Box
+        aria-label={`Container ${assigned.code}. ${assigned.location}.`}
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "stretch",
+          width: "100%",
+          maxWidth: 352,
+          minHeight: 40,
+          borderRadius: "4px",
+          border: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.default",
+          overflow: "hidden",
+          textAlign: "left",
+        }}
+      >
+        {labelColumn}
+        <Box
+          sx={{
+            flex: 1,
+            minWidth: 0,
+            display: "flex",
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            pl: 2,
+            pr: 1.5,
+            py: 0.5,
+            gap: 0.5,
+            boxSizing: "border-box",
+          }}
+        >
+          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, maxWidth: "42%" }}>
+            <Inventory2OutlinedIcon sx={{ fontSize: 12, color: "text.primary", flexShrink: 0 }} />
+            <Typography
+              sx={{
+                fontSize: 12,
+                lineHeight: 1.5,
+                letterSpacing: "0.15px",
+                color: "text.primary",
+                fontWeight: 400,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {assigned.code}
+            </Typography>
+          </Stack>
+          <Divider
+            orientation="vertical"
+            flexItem
+            sx={{ height: 18, alignSelf: "center", borderColor: "divider", mx: 0.25 }}
+          />
+          <Stack direction="row" alignItems="center" spacing={0.5} sx={{ flexShrink: 0, maxWidth: "38%" }}>
+            <PushPinOutlinedIcon sx={{ fontSize: 12, color: "text.primary", flexShrink: 0 }} />
+            <Typography
+              sx={{
+                fontSize: 12,
+                lineHeight: 1.5,
+                letterSpacing: "0.15px",
+                color: "text.primary",
+                fontWeight: 500,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+              dir="auto"
+            >
+              {assigned.location}
+            </Typography>
+          </Stack>
+          <IconButton
+            size="small"
+            aria-label="Clear container assignment"
+            onClick={(e) => {
+              e.stopPropagation();
+              onClear();
+            }}
+            sx={{ flexShrink: 0, p: 0.5, ml: 0.5 }}
+          >
+            <CloseIcon sx={{ fontSize: 16 }} />
+          </IconButton>
+        </Box>
+      </Box>
+    );
+  }
+
+  return (
+    <Box
+      role="button"
+      tabIndex={0}
+      onClick={onSimulateScan}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onSimulateScan();
+        }
+      }}
+      aria-label="Container assignment. Click to simulate scan."
+      sx={{
+        display: "flex",
+        flexDirection: "row",
+        alignItems: "stretch",
+        width: "100%",
+        maxWidth: 352,
+        minHeight: 40,
+        borderRadius: "4px",
+        border: "1px solid",
+        borderColor: "divider",
+        bgcolor: "background.default",
+        overflow: "hidden",
+        textAlign: "left",
+        cursor: "pointer",
+        "&:focus-visible": { outline: (theme) => `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
+      }}
+    >
+      {labelColumn}
+      <Box
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          pl: 2,
+          pr: 1.5,
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "center",
+          alignSelf: "stretch",
+          boxSizing: "border-box",
+        }}
+      >
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={1}
+          sx={{
+            py: 0.75,
+            width: "100%",
+            boxSizing: "border-box",
+          }}
+        >
+          <DocumentScannerOutlinedIcon sx={{ fontSize: 20, color: "text.disabled", flexShrink: 0 }} />
+          <Typography
+            sx={{
+              fontSize: 14,
+              lineHeight: "24px",
+              letterSpacing: "0.15px",
+              color: "text.disabled",
+              whiteSpace: "nowrap",
+              overflow: "hidden",
+              textOverflow: "ellipsis",
+            }}
+          >
+            Scan to Assign
+          </Typography>
+        </Stack>
+      </Box>
+    </Box>
+  );
+}
+
 function ItemBlock({
   title,
   image,
@@ -4393,6 +5295,12 @@ function ItemBlock({
   itemId,
   itemRemarkCount = 0,
   onItemRemarksClick,
+  titleRowEnd,
+  showHoldAssignDefault = false,
+  remoteFacilityTitleRow = false,
+  containerAssignByItemId = {},
+  onContainerAssignSimulate = () => {},
+  onContainerAssignClear = () => {},
 }: {
   title: string;
   image: string;
@@ -4403,54 +5311,176 @@ function ItemBlock({
   itemId?: string;
   itemRemarkCount?: number;
   onItemRemarksClick?: () => void;
+  /** e.g. “Item received” control (Figma 2052:23611). */
+  titleRowEnd?: ReactNode;
+  /** Figma 1664:18640 — show hold / container assign control (on-hold shipment). */
+  showHoldAssignDefault?: boolean;
+  /** Other-facilities row: no container assign; remarks after title; `titleRowEnd` (e.g. Item Received) aligned to the row end. */
+  remoteFacilityTitleRow?: boolean;
+  /** Prototype scan → container row (Figma 2345:27263), keyed by `itemId`. */
+  containerAssignByItemId?: Record<string, PrototypeContainerAssignDetail>;
+  onContainerAssignSimulate?: (itemId: string) => void;
+  onContainerAssignClear?: (itemId: string) => void;
 }) {
   const canOpenRemarks = itemRemarkCount > 0;
+  const premiumGiftKitItemId = PACK_LINE_ITEM_META[2].id;
+  const showItemRemarksControl =
+    itemId != null &&
+    onItemRemarksClick != null &&
+    (itemRemarkCount > 0 || itemId !== premiumGiftKitItemId);
+
+  const shouldShowHoldAssign =
+    Boolean(showHoldAssignDefault) &&
+    itemId !== premiumGiftKitItemId &&
+    !remoteFacilityTitleRow;
+
+  const remarksAfterTitle =
+    shouldShowHoldAssign ||
+    remoteFacilityTitleRow ||
+    (Boolean(showHoldAssignDefault) && itemId === premiumGiftKitItemId);
+
+  const titleRowAlignCenter =
+    shouldShowHoldAssign || remoteFacilityTitleRow || (Boolean(showHoldAssignDefault) && itemId === premiumGiftKitItemId);
+
+  const remarksControl =
+    showItemRemarksControl ? (
+      <Tooltip title={`Item remarks (${itemRemarkCount})`}>
+        <Box component="span" sx={{ flexShrink: 0, alignSelf: "flex-start" }}>
+          <IconButton
+            aria-label={`Item remarks (${itemRemarkCount})`}
+            disabled={!canOpenRemarks}
+            onClick={(e) => {
+              e.stopPropagation();
+              if (!canOpenRemarks) return;
+              onItemRemarksClick();
+            }}
+            size="small"
+            sx={{
+              flexShrink: 0,
+              alignSelf: "flex-start",
+              mt: -0.25,
+              bgcolor: "background.paper",
+              boxShadow: 1,
+              "&:hover": { bgcolor: "grey.100" },
+            }}
+          >
+            <Badge
+              color="primary"
+              variant="dot"
+              invisible={itemRemarkCount === 0}
+              sx={{
+                "& .MuiBadge-badge": {
+                  minWidth: 6,
+                  width: 6,
+                  height: 6,
+                  borderRadius: "50%",
+                  padding: 0,
+                  fontSize: 0,
+                  lineHeight: 0,
+                  top: 4,
+                  right: 4,
+                  backgroundColor: "rgba(1, 87, 155, 1)",
+                  boxShadow: (theme) => `0 0 0 1px ${theme.palette.background.paper}`,
+                },
+              }}
+            >
+              <ChatBubbleOutlineIcon sx={{ fontSize: 20 }} />
+            </Badge>
+          </IconButton>
+        </Box>
+      </Tooltip>
+    ) : null;
+
   return (
     <Stack spacing={2} sx={{ width: "100%", alignSelf: "stretch" }}>
-      <Stack
-        direction="row"
-        alignItems="flex-start"
-        justifyContent="space-between"
-        spacing={1}
-        sx={{ width: "100%", gap: 1 }}
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          flexWrap: "wrap",
+          alignItems: titleRowAlignCenter ? "center" : "flex-start",
+          width: "100%",
+          gap: 1,
+          rowGap: 1,
+        }}
       >
-        <Typography variant="body1" color="text.primary" sx={{ flex: "1 1 auto", minWidth: 0, wordBreak: "break-word", pr: 1 }}>
-          {title}
-        </Typography>
-        {itemId != null && onItemRemarksClick != null ? (
-          <Tooltip title={`Item remarks (${itemRemarkCount})`}>
-            <Box component="span">
-              <IconButton
-                aria-label={`Item remarks (${itemRemarkCount})`}
-                disabled={!canOpenRemarks}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!canOpenRemarks) return;
-                  onItemRemarksClick();
-                }}
-                size="small"
-                sx={{
-                  flexShrink: 0,
-                  alignSelf: "flex-start",
-                  mt: -0.25,
-                  bgcolor: "background.paper",
-                  boxShadow: 1,
-                  "&:hover": { bgcolor: "grey.100" },
-                }}
-              >
-                <Badge
-                  color="primary"
-                  badgeContent={itemRemarkCount > 0 ? itemRemarkCount : undefined}
-                  invisible={itemRemarkCount === 0}
-                  sx={{ "& .MuiBadge-badge": { fontSize: 10, minWidth: 18, height: 18 } }}
-                >
-                  <ChatBubbleOutlineIcon sx={{ fontSize: 20 }} />
-                </Badge>
-              </IconButton>
-            </Box>
-          </Tooltip>
+        <Box
+          sx={{
+            flex: "0 1 auto",
+            minWidth: 0,
+            maxWidth: "100%",
+            display: "flex",
+            flexDirection: "row",
+            flexWrap: "wrap",
+            alignItems: titleRowAlignCenter ? "center" : "flex-start",
+            gap: 1,
+            columnGap: 1,
+            rowGap: 0.5,
+            pr: shouldShowHoldAssign || remoteFacilityTitleRow ? 0 : 1,
+          }}
+        >
+          <Typography
+            variant="body1"
+            color="text.primary"
+            sx={{
+              flex: "0 1 auto",
+              minWidth: 0,
+              maxWidth: "100%",
+              width: "fit-content",
+              display: "block",
+              wordBreak: "break-word",
+            }}
+          >
+            {title}
+          </Typography>
+          {remoteFacilityTitleRow ? (
+            remarksControl
+          ) : shouldShowHoldAssign ? (
+            <>
+              {titleRowEnd != null ? <Box sx={{ flexShrink: 0 }}>{titleRowEnd}</Box> : null}
+              {remarksControl}
+            </>
+          ) : showHoldAssignDefault && itemId === premiumGiftKitItemId ? (
+            <>{remarksControl}</>
+          ) : (
+            <>{titleRowEnd != null ? <Box sx={{ flexShrink: 0 }}>{titleRowEnd}</Box> : null}</>
+          )}
+        </Box>
+        {remoteFacilityTitleRow && titleRowEnd != null ? (
+          <Box
+            sx={{
+              flexShrink: 0,
+              ml: { xs: 0, sm: "auto" },
+              alignSelf: "center",
+            }}
+          >
+            {titleRowEnd}
+          </Box>
         ) : null}
-      </Stack>
+        {shouldShowHoldAssign ? (
+          <Box
+            sx={{
+              flexShrink: 0,
+              ml: { xs: 0, sm: "auto" },
+              width: { xs: "100%", sm: "auto" },
+              minWidth: { xs: "100%", sm: 200 },
+              maxWidth: 352,
+              alignSelf: "center",
+            }}
+          >
+            {itemId != null ? (
+              <ItemHoldAssignContainer
+                assigned={containerAssignByItemId[itemId] ?? null}
+                onSimulateScan={() => onContainerAssignSimulate(itemId)}
+                onClear={() => onContainerAssignClear(itemId)}
+              />
+            ) : null}
+          </Box>
+        ) : null}
+        {!remarksAfterTitle && remarksControl ? (
+          <Box sx={{ flexShrink: 0, ml: "auto", alignSelf: "flex-start" }}>{remarksControl}</Box>
+        ) : null}
+      </Box>
       <Stack
         direction={{ xs: "column", md: "row" }}
         spacing={{ xs: 3, md: 4 }}
