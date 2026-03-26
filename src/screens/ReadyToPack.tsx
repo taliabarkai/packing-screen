@@ -195,6 +195,10 @@ const ORDER_SEARCH_PLACEHOLDER = "Scan barcode or search by order/shipment ID";
 const PROTOTYPE_PACK_ORDER_ID = "pack";
 /** Prototype: pending queue — search `pending` (legacy alias: `fix`) or Next Order. */
 const PROTOTYPE_PENDING_ORDER_ID = "pending";
+/** Prototype: ready-to-pack + manual tracking ID row (Next Order after `pending`, or search `manual` / `manualpack`). */
+const PROTOTYPE_MANUAL_PACK_ORDER_ID = "manual";
+/** Prefilled manual tracking value for the manual-pack prototype and after pending acknowledgement (enables Pack CTA). */
+const PROTOTYPE_MANUAL_PACK_TRACKING_DEMO = "DEMO-TRACK-001";
 /** Prototype: sorting station — search `sort`; full screen without pack checkbox / pack buttons (API tracks sorting). */
 const PROTOTYPE_SORT_STATION_ORDER_ID = "sort";
 /** Prototype: already packed shipment — search `packed` or Next Order. */
@@ -284,6 +288,7 @@ const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_ON_HOLD_ORDER_ID,
   PROTOTYPE_PACK_ORDER_ID,
   PROTOTYPE_PENDING_ORDER_ID,
+  PROTOTYPE_MANUAL_PACK_ORDER_ID,
   PROTOTYPE_SIMILAR_ORDERS_ORDER_ID,
   PROTOTYPE_SPLIT_ORDER_ID,
   PROTOTYPE_PACKED_ORDER_ID,
@@ -292,6 +297,10 @@ const PROTOTYPE_NEXT_ORDER_CYCLE = [
 
 function isPrototypePendingOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_PENDING_ORDER_ID;
+}
+
+function isPrototypeManualPackOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_MANUAL_PACK_ORDER_ID;
 }
 
 function isSortingStationOrderId(id: string | null): boolean {
@@ -331,6 +340,8 @@ function normalizeOrderIdForLoad(raw: string): string {
   const lower = t.toLowerCase();
   if (lower === PROTOTYPE_PACK_ORDER_ID) return PROTOTYPE_PACK_ORDER_ID;
   if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "fix") return PROTOTYPE_PENDING_ORDER_ID;
+  if (lower === PROTOTYPE_MANUAL_PACK_ORDER_ID || lower === "manualpack" || lower === "manual-pack")
+    return PROTOTYPE_MANUAL_PACK_ORDER_ID;
   if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
@@ -350,7 +361,13 @@ function normalizeSplitNewShipmentIdForTab(id: string | null): string {
 
 function prototypeSplitOriginalShipmentIdForTabs(currentShipmentId: string): string {
   const t = currentShipmentId.trim();
-  if (!t || t === PROTOTYPE_PACK_ORDER_ID || t === PROTOTYPE_SORT_STATION_ORDER_ID) return "SH-12345";
+  if (
+    !t ||
+    t === PROTOTYPE_PACK_ORDER_ID ||
+    t === PROTOTYPE_MANUAL_PACK_ORDER_ID ||
+    t === PROTOTYPE_SORT_STATION_ORDER_ID
+  )
+    return "SH-12345";
   if (t.startsWith("SH-")) return t;
   return "SH-12345";
 }
@@ -3068,13 +3085,17 @@ export default function ReadyToPack() {
       ? activeSimilarOrder.orderNumber
       : isSplitOrdersView && loadedOrderId && activeSplitOrder
         ? activeSplitOrder.orderNumber
-        : loadedOrderId;
+        : isPrototypeManualPackOrderId(loadedOrderId)
+          ? "5847219"
+          : loadedOrderId;
   const joinDialogShipmentId =
     isSimilarOrdersView && loadedOrderId
       ? activeSimilarOrder.shipmentId
       : isSplitOrdersView && loadedOrderId && activeSplitOrder
         ? activeSplitOrder.shipmentId
-        : loadedOrderId ?? "";
+        : isPrototypeManualPackOrderId(loadedOrderId)
+          ? "SH-12345"
+          : loadedOrderId ?? "";
 
   /** Similar orders: tab 0 full list, tab 1 only the differing product. Split: dialog inventories or default prototype second tab. */
   const packItemsResolved = useMemo(() => {
@@ -3254,6 +3275,11 @@ export default function ReadyToPack() {
     if (!isPrototypeSplitOrdersId(loadedOrderId)) {
       setSplitLinkedPair(null);
       setSplitTabInventories(null);
+    }
+    if (isPrototypeManualPackOrderId(loadedOrderId)) {
+      setTrackingManualMode(true);
+      setShipmentDetailsEditUnlocked(true);
+      setManualTrackingInput(PROTOTYPE_MANUAL_PACK_TRACKING_DEMO);
     }
     setPrototypeFactorySiteView("kiryatGat");
     const base = buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false }));
@@ -3446,6 +3472,10 @@ export default function ReadyToPack() {
     setPendingShipmentDialogDismissed(true);
     setPackingOrderUiStatus("readyToPack");
     setSentToFixReason(null);
+    setTrackingManualMode(true);
+    setShipmentDetailsEditUnlocked(true);
+    setManualTrackingInput(PROTOTYPE_MANUAL_PACK_TRACKING_DEMO);
+    manualTrackingLoadedFromApiRef.current = false;
   };
 
   const handleShipmentPendingCancel = () => {
@@ -5038,7 +5068,7 @@ export default function ReadyToPack() {
                 alignItems="center"
                 justifyContent="space-between"
                 spacing={2}
-                sx={{ mb: 2, width: "100%", minWidth: 0 }}
+                sx={{ mb: 0.5, width: "100%", minWidth: 0 }}
               >
                 <Typography variant="h6" sx={{ color: "primary.dark", minWidth: 0 }}>
                   Remarks
@@ -5058,6 +5088,8 @@ export default function ReadyToPack() {
                 onChange={(_, v: RemarksTabValue) => setRemarksTab(v)}
                 sx={{
                   minHeight: 40,
+                  mt: 0,
+                  pt: 0,
                   mb: 2,
                   borderBottom: 1,
                   borderColor: "divider",
