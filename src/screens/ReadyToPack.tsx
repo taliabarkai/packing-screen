@@ -2325,28 +2325,17 @@ function ItemRemarksDialog({
   onClose,
   itemId,
   messages,
-  onSendMessage,
 }: {
   open: boolean;
   onClose: () => void;
   itemId: string;
   messages: ShipmentMessage[];
-  onSendMessage: () => void;
 }) {
-  const [tab, setTab] = useState<RemarksTabValue>("all");
-
-  useEffect(() => {
-    if (open) setTab("all");
-  }, [open, itemId]);
-
-  const meta = PACK_LINE_ITEM_META.find((x) => x.id === itemId);
-  const productTitle = meta?.title ?? itemId;
-
   const filteredMessages = useMemo(() => {
     return messages
-      .filter((m) => m.itemId === itemId && (tab === "all" || m.channel === tab))
+      .filter((m) => m.itemId === itemId)
       .sort(compareShipmentMessagesNewestFirst);
-  }, [messages, itemId, tab]);
+  }, [messages, itemId]);
 
   return (
     <Dialog
@@ -2370,7 +2359,7 @@ function ItemRemarksDialog({
       <DialogTitle
         sx={{
           display: "flex",
-          alignItems: "flex-start",
+          alignItems: "center",
           justifyContent: "space-between",
           gap: 2,
           pr: 1,
@@ -2380,15 +2369,10 @@ function ItemRemarksDialog({
           flexShrink: 0,
         }}
       >
-        <Box sx={{ minWidth: 0 }}>
-          <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
-            Item remarks
-          </Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, letterSpacing: "0.15px" }}>
-            {productTitle}
-          </Typography>
-        </Box>
-        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mt: -0.5, mr: -0.5 }}>
+        <Typography variant="subtitle1" fontWeight={500} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
+          Item Remarks
+        </Typography>
+        <IconButton aria-label="Close" onClick={onClose} size="small" sx={{ mr: -0.5 }}>
           <CloseIcon />
         </IconButton>
       </DialogTitle>
@@ -2405,22 +2389,6 @@ function ItemRemarksDialog({
           overflow: "hidden",
         }}
       >
-        <Tabs
-          value={tab}
-          onChange={(_, v: RemarksTabValue) => setTab(v)}
-          sx={{
-            minHeight: 40,
-            mb: 2,
-            borderBottom: 1,
-            borderColor: "divider",
-            flexShrink: 0,
-            "& .MuiTab-root": { textTransform: "none", fontWeight: 500, minHeight: 40 },
-          }}
-        >
-          <Tab label="All" value="all" />
-          <Tab label="Packers" value="packing" />
-          <Tab label="CSR" value="csr" />
-        </Tabs>
         <Box
           sx={{
             border: "1px solid",
@@ -2445,17 +2413,9 @@ function ItemRemarksDialog({
         </Box>
       </DialogContent>
       <Divider sx={{ flexShrink: 0 }} />
-      <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
-        <Button variant="outlined" color="inherit" onClick={onClose} sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}>
+      <DialogActions sx={{ px: 3, py: 2, justifyContent: "flex-end", flexShrink: 0 }}>
+        <Button variant="contained" color="primary" onClick={onClose} sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}>
           Close
-        </Button>
-        <Button
-          variant="contained"
-          color="primary"
-          onClick={onSendMessage}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}
-        >
-          Send message
         </Button>
       </DialogActions>
     </Dialog>
@@ -2975,12 +2935,6 @@ export default function ReadyToPack() {
 
   const openItemRemarksDialog = (itemId: string) => {
     setItemRemarksItemId(itemId);
-  };
-
-  const handleItemRemarksSendMessage = () => {
-    const id = itemRemarksItemId;
-    setItemRemarksItemId(null);
-    if (id) openCreateRemarkDialog(id);
   };
 
   const handleCreateRemarkSend = ({
@@ -4294,7 +4248,6 @@ export default function ReadyToPack() {
           onClose={() => setItemRemarksItemId(null)}
           itemId={itemRemarksItemId}
           messages={shipmentMessages}
-          onSendMessage={handleItemRemarksSendMessage}
         />
       ) : null}
       {loadedOrderId && (
