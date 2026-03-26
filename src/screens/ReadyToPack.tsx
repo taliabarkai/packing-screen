@@ -4200,7 +4200,10 @@ export default function ReadyToPack() {
                           key={id}
                           onClick={() => {
                             setMoreActionsMenuAnchor(null);
-                            if (id === "unpack-shipment") setPackingOrderUiStatus("readyToPack");
+                            if (id === "unpack-shipment") {
+                              setPackingOrderUiStatus("readyToPack");
+                              setItemsReviewed(false);
+                            }
                             if (id === "join-shipment") setJoinShipmentDialogOpen(true);
                             if (id === "split-shipment") setSplitShipmentDialogOpen(true);
                           }}
