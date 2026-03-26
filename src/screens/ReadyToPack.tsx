@@ -40,7 +40,7 @@ import {
 } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import type { Theme } from "@mui/material/styles";
-import { orange, purple, red, teal } from "@mui/material/colors";
+import { lightBlue, orange, pink, purple, red } from "@mui/material/colors";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
@@ -77,8 +77,13 @@ import { loadNewSplitShipmentIdFromApi } from "../api/loadNewSplitShipmentId";
 import { loadTrackingNumberFromApi } from "../api/loadTrackingNumber";
 import oakAndLunaLogo from "../assets/oakandluna.svg";
 import tenenGroupLogo from "../assets/tenengroup.svg";
-
-const PACK_ITEM_COUNT = 3;
+import product1Img from "../assets/products/product-1.png";
+import product2Img from "../assets/products/product-2.png";
+import product3Img from "../assets/products/product-3.png";
+import product4Img from "../assets/products/Product-4.png";
+import product5Img from "../assets/products/Product-5.png";
+import boxMediumImg from "../assets/products/box-medium.png";
+import boxSmallImg from "../assets/products/box-small.png";
 
 const MORE_ACTIONS_MENU_ITEMS_DEFAULT = [
   { id: "reprint-giftcard", label: "Reprint Giftcard", Icon: CardGiftcardOutlinedIcon },
@@ -94,13 +99,11 @@ const MORE_ACTIONS_MENU_ITEMS_PACKED = [
 ] as const;
 
 const IMG = {
-  item1: "https://images.unsplash.com/photo-1611652022419-a9419f74343d?w=400&h=400&fit=crop",
-  boxMedium:
-    "https://images.unsplash.com/photo-1515562141207-7a88fb7ce338?w=280&h=280&fit=crop",
-  item2: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=400&h=400&fit=crop",
-  boxSmall:
-    "https://images.unsplash.com/photo-1603561591411-07134e71a2a9?w=280&h=280&fit=crop",
-  item3: "https://images.unsplash.com/photo-1549465220-1a8b9238cd48?w=400&h=400&fit=crop",
+  item1: product1Img,
+  boxMedium: boxMediumImg,
+  item2: product2Img,
+  boxSmall: boxSmallImg,
+  item3: product3Img,
 } as const;
 
 type JoinTransferItem = {
@@ -115,13 +118,13 @@ const JOIN_SOURCE_SEED: JoinTransferItem[] = [
   {
     id: "join-ext-1",
     title: "Serena Name Huggies with Diamonds in Sterling Silver",
-    image: "https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=200&h=200&fit=crop",
+    image: product4Img,
     movable: true,
   },
   {
     id: "join-ext-2",
     title: "Grace Interlocking Bracelet in Sterling Silver",
-    image: "https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=200&h=200&fit=crop",
+    image: product5Img,
     movable: true,
   },
 ];
@@ -223,8 +226,8 @@ const ORDER_SEARCH_PLACEHOLDER = "Scan barcode or search by order/shipment ID";
 
 /** Prototype: full ready-to-pack UI — search `pack` or Next Order. */
 const PROTOTYPE_PACK_ORDER_ID = "pack";
-/** Prototype: pending queue — search `fix`, `pending`, or Next Order. */
-const PROTOTYPE_PENDING_ORDER_ID = "fix";
+/** Prototype: pending queue — search `pending` (legacy alias: `fix`) or Next Order. */
+const PROTOTYPE_PENDING_ORDER_ID = "pending";
 /** Prototype: sorting station — search `sort`; full screen without pack checkbox / pack buttons (API tracks sorting). */
 const PROTOTYPE_SORT_STATION_ORDER_ID = "sort";
 /** Prototype: already packed shipment — search `packed` or Next Order. */
@@ -263,11 +266,12 @@ const PROTOTYPE_CANCELLED_STATUS_BODY =
 const PROTOTYPE_ON_HOLD_STATUS_BODY =
   "This shipment is on hold. Do not pack until the hold is released. Contact CSR if you need more information.";
 
-/** Next Order (prototype): sort → pack → pending → packed → cancelled → (loops to sort). */
+/** Next Order (prototype): sort → pack → pending → similar → packed → cancelled → (loops to sort). */
 const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_SORT_STATION_ORDER_ID,
   PROTOTYPE_PACK_ORDER_ID,
   PROTOTYPE_PENDING_ORDER_ID,
+  PROTOTYPE_SIMILAR_ORDERS_ORDER_ID,
   PROTOTYPE_PACKED_ORDER_ID,
   PROTOTYPE_CANCELLED_ORDER_ID,
 ] as const;
@@ -308,7 +312,7 @@ function normalizeOrderIdForLoad(raw: string): string {
   const t = raw.trim();
   const lower = t.toLowerCase();
   if (lower === PROTOTYPE_PACK_ORDER_ID) return PROTOTYPE_PACK_ORDER_ID;
-  if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "pending") return PROTOTYPE_PENDING_ORDER_ID;
+  if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "fix") return PROTOTYPE_PENDING_ORDER_ID;
   if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
@@ -615,18 +619,18 @@ const REMARK_PRESET_OPTIONS: string[] = [
 const PACK_LINE_ITEM_META: { id: string; title: string; itemListLabel: string }[] = [
   {
     id: "pack-item-1",
-    title: "1 - Engraved Compass Necklace - Gold Vermeil",
-    itemListLabel: "1 — Engraved Compass Necklace · Gold Vermeil",
+    title: "Engraved Compass Necklace - Gold Vermeil",
+    itemListLabel: "Engraved Compass Necklace · Gold Vermeil",
   },
   {
     id: "pack-item-2",
-    title: "2 - Grace Interlocking Necklace with Diamond in 18K Gold Vermeil",
-    itemListLabel: "2 — Grace Interlocking Necklace · 18K Gold Vermeil",
+    title: "Grace Interlocking Necklace with Diamond in 18K Gold Vermeil",
+    itemListLabel: "Grace Interlocking Necklace · 18K Gold Vermeil",
   },
   {
     id: "pack-item-3",
-    title: "3 - Premium Gift Kit",
-    itemListLabel: "3 — Premium Gift Kit",
+    title: "Premium Gift Kit",
+    itemListLabel: "Premium Gift Kit",
   },
 ];
 
@@ -1627,10 +1631,15 @@ function JoinShipmentDialog({
   open,
   onClose,
   currentShipmentId,
+  prefillSourceShipmentId = null,
+  onConfirm,
 }: {
   open: boolean;
   onClose: () => void;
   currentShipmentId: string;
+  /** When set (e.g. similar-order pair), left column loads this shipment immediately. */
+  prefillSourceShipmentId?: string | null;
+  onConfirm?: (nextCurrentItems: JoinTransferItem[]) => void;
 }) {
   const [sourceShipmentInput, setSourceShipmentInput] = useState("");
   const [loadedSourceId, setLoadedSourceId] = useState<string | null>(null);
@@ -1640,12 +1649,23 @@ function JoinShipmentDialog({
 
   useEffect(() => {
     if (!open) return;
+    const prefill = prefillSourceShipmentId?.trim();
+    if (prefill) {
+      const nextSource = JOIN_SOURCE_SEED.map((x) => ({ ...x }));
+      const nextCurrent = JOIN_CURRENT_SEED.map((x) => ({ ...x }));
+      setLoadedSourceId(prefill);
+      setSourceShipmentInput(prefill);
+      setSourceItems(nextSource);
+      setCurrentItems(nextCurrent);
+      setInitialLayoutKey(joinLayoutKey(nextSource, nextCurrent));
+      return;
+    }
     setSourceShipmentInput("");
     setLoadedSourceId(null);
     setSourceItems([]);
     setCurrentItems(JOIN_CURRENT_SEED.map((x) => ({ ...x })));
     setInitialLayoutKey("");
-  }, [open]);
+  }, [open, prefillSourceShipmentId, currentShipmentId]);
 
   const layoutKey = joinLayoutKey(sourceItems, currentItems);
   const transferDirty =
@@ -1699,6 +1719,7 @@ function JoinShipmentDialog({
 
   const handleConfirm = () => {
     /* prototype: wire join API when available */
+    onConfirm?.(currentItems);
     onClose();
   };
 
@@ -1798,7 +1819,7 @@ function JoinShipmentDialog({
               <>
                 <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
                   <Typography variant="subtitle1" fontWeight={600} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
-                    Shipment #{loadedSourceId} ({sourceItems.length} items)
+                    Shipment {joinShipmentDisplayRef(loadedSourceId)} ({sourceItems.length} items)
                   </Typography>
                   <IconButton aria-label="Clear shipment" size="small" onClick={handleClearLoadedSource}>
                     <CloseIcon fontSize="small" />
@@ -1980,10 +2001,12 @@ function SplitShipmentDialog({
   open,
   onClose,
   currentShipmentId,
+  onConfirm,
 }: {
   open: boolean;
   onClose: () => void;
   currentShipmentId: string;
+  onConfirm?: (nextCurrentItems: JoinTransferItem[]) => void;
 }) {
   const [currentItems, setCurrentItems] = useState<JoinTransferItem[]>([]);
   const [newItems, setNewItems] = useState<JoinTransferItem[]>([]);
@@ -2044,6 +2067,7 @@ function SplitShipmentDialog({
 
   const handleConfirm = () => {
     /* prototype: wire split API when available */
+    onConfirm?.(currentItems);
     onClose();
   };
 
@@ -2819,6 +2843,9 @@ export default function ReadyToPack() {
   const [sendToFixDialogOpen, setSendToFixDialogOpen] = useState(false);
   const [joinShipmentDialogOpen, setJoinShipmentDialogOpen] = useState(false);
   const [splitShipmentDialogOpen, setSplitShipmentDialogOpen] = useState(false);
+  const [packItems, setPackItems] = useState<JoinTransferItem[]>(() =>
+    buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false })),
+  );
   const [shipmentMessages, setShipmentMessages] = useState<ShipmentMessage[]>(() => buildInitialShipmentMessages());
   const [remarksTab, setRemarksTab] = useState<RemarksTabValue>("all");
   const [createRemarkOpen, setCreateRemarkOpen] = useState(false);
@@ -2850,6 +2877,18 @@ export default function ReadyToPack() {
     isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.orderNumber : loadedOrderId;
   const joinDialogShipmentId =
     isSimilarOrdersView && loadedOrderId ? activeSimilarOrder.shipmentId : loadedOrderId ?? "";
+  const packItemCount = packItems.length;
+  const visiblePackItemIds = useMemo(() => new Set(packItems.map((i) => i.id)), [packItems]);
+  const extraPackItems = useMemo(
+    () => packItems.filter((i) => !PACK_LINE_ITEM_META.some((meta) => meta.id === i.id)),
+    [packItems],
+  );
+  /** Other similar-order tab: prefill join dialog source column when opening from the pair UI. */
+  const joinPrefillSourceShipmentId = useMemo(() => {
+    if (!isSimilarOrdersView || SIMILAR_ORDER_TABS.length < 2) return null;
+    const otherIndex = similarShipmentTabIndex === 0 ? 1 : 0;
+    return SIMILAR_ORDER_TABS[otherIndex].shipmentId;
+  }, [isSimilarOrdersView, similarShipmentTabIndex]);
   const activeRoute = findShippingRoute(activeCarrierRouteId) ?? SHIPPING_ROUTE_ROWS[0];
   const activeCarrierLogoSrc = findCarrierLogoSrc(activeRoute);
   /** Hide pack checkbox + pack / send-to-fix / more-actions (sorting station is view-only for pack flow). */
@@ -2919,6 +2958,7 @@ export default function ReadyToPack() {
     setSendToFixDialogOpen(false);
     setJoinShipmentDialogOpen(false);
     setSplitShipmentDialogOpen(false);
+    setPackItems(buildSplitShipmentCurrentItems().map((x) => ({ ...x, movable: false })));
     setShipmentMessages(buildInitialShipmentMessages());
     setRemarksTab("all");
     setCreateRemarkOpen(false);
@@ -3456,8 +3496,8 @@ export default function ReadyToPack() {
                       sx={{
                         display: "inline-flex",
                         alignItems: "center",
-                        bgcolor: teal[50],
-                        color: teal[900],
+                        bgcolor: pink[50],
+                        color: pink.A700,
                         px: 1.25,
                         py: 0.5,
                         borderRadius: 1,
@@ -3503,7 +3543,7 @@ export default function ReadyToPack() {
               sx={{ mb: 2 }}
             >
               <Typography variant="h6" sx={{ color: "primary.dark", flexShrink: 0 }}>
-                Items to Pack ({PACK_ITEM_COUNT})
+                Items to Pack ({packItemCount})
               </Typography>
               {isSimilarOrdersView ? (
                 <Tabs
@@ -3547,61 +3587,69 @@ export default function ReadyToPack() {
                   ))}
                 </Tabs>
               ) : null}
+              {isSimilarOrdersView ? (
+                <Stack direction="row" alignItems="center" spacing={0.75} sx={{ ml: { xs: 0, md: "auto" } }}>
+                  <MergeTypeIcon sx={{ fontSize: 16, color: "primary.dark" }} />
+                  <Link
+                    component="button"
+                    type="button"
+                    underline="hover"
+                    onClick={() => setJoinShipmentDialogOpen(true)}
+                    sx={{ color: "primary.dark", fontSize: 16, fontWeight: 400, flexShrink: 0 }}
+                  >
+                    Join Shipments
+                  </Link>
+                </Stack>
+              ) : null}
             </Stack>
-            {isSimilarOrdersView ? (
-              <Alert
-                severity="info"
-                icon={<InfoOutlinedIcon />}
-                sx={{ mb: 2, alignItems: "center", "& .MuiAlert-message": { width: "100%" } }}
-              >
-                This order has a similar order.
-              </Alert>
-            ) : null}
             <Divider sx={{ mb: 2 }} />
 
-            <ItemBlock
-              title="1 - Engraved Compass Necklace - Gold Vermeil"
-              image={IMG.item1}
-              imageRadius={1}
-              itemId={PACK_LINE_ITEM_META[0].id}
-              itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[0].id] ?? 0}
-              onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[0].id)}
-              details={
-                <>
-                  <SectionOverline>Details</SectionOverline>
-                  <DetailRow label="Inscription #1:" value="Jane" />
-                  <DetailRow label="Inscription #2:" value="Kelsey" />
-                  <DetailRow label="Inscription #3:" value="Tiffany" />
-                  <DetailRow label="Material:" value="18K Rose Gold Vermeil" />
-                  <DetailRow label="Diamond:" value="Without Diamond" />
-                  <DetailRow label="Size:" value={'18" - 22"'} />
-                </>
-              }
-              packaging={
-                <>
-                  <SectionOverline>packaging type</SectionOverline>
-                  <Stack direction="row" spacing={3}>
-                    <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                      Box:
-                    </Typography>
-                    <Typography variant="body1" fontWeight={500}>
-                      Medium
-                    </Typography>
-                  </Stack>
-                  <Box
-                    component="img"
-                    src={IMG.boxMedium}
-                    alt=""
-                    sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
-                  />
-                </>
-              }
-            />
+            {visiblePackItemIds.has(PACK_LINE_ITEM_META[0].id) ? (
+              <ItemBlock
+                title={PACK_LINE_ITEM_META[0].title}
+                image={IMG.item1}
+                imageRadius={1}
+                itemId={PACK_LINE_ITEM_META[0].id}
+                itemRemarkCount={remarkCountByItemId[PACK_LINE_ITEM_META[0].id] ?? 0}
+                onItemRemarksClick={() => openItemRemarksDialog(PACK_LINE_ITEM_META[0].id)}
+                details={
+                  <>
+                    <SectionOverline>Details</SectionOverline>
+                    <DetailRow label="Inscription #1:" value="Jane" />
+                    <DetailRow label="Inscription #2:" value="Kelsey" />
+                    <DetailRow label="Inscription #3:" value="Tiffany" />
+                    <DetailRow label="Material:" value="18K Rose Gold Vermeil" />
+                    <DetailRow label="Diamond:" value="Without Diamond" />
+                    <DetailRow label="Size:" value={'18" - 22"'} />
+                  </>
+                }
+                packaging={
+                  <>
+                    <SectionOverline>packaging type</SectionOverline>
+                    <Stack direction="row" spacing={3}>
+                      <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
+                        Box:
+                      </Typography>
+                      <Typography variant="body1" fontWeight={500}>
+                        Medium
+                      </Typography>
+                    </Stack>
+                    <Box
+                      component="img"
+                      src={IMG.boxMedium}
+                      alt=""
+                      sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
+                    />
+                  </>
+                }
+              />
+            ) : null}
 
             <Divider sx={{ my: 2 }} />
 
-            <ItemBlock
-              title="2 - Grace Interlocking Necklace with Diamond in 18K Gold Vermeil"
+            {visiblePackItemIds.has(PACK_LINE_ITEM_META[1].id) ? (
+              <ItemBlock
+              title={PACK_LINE_ITEM_META[1].title}
               image={IMG.item2}
               imageOverlay
               itemId={PACK_LINE_ITEM_META[1].id}
@@ -3652,12 +3700,14 @@ export default function ReadyToPack() {
                   </Box>
                 </>
               }
-            />
+              />
+            ) : null}
 
             <Divider sx={{ my: 2 }} />
 
-            <ItemBlock
-              title="3 - Premium Gift Kit"
+            {visiblePackItemIds.has(PACK_LINE_ITEM_META[2].id) ? (
+              <ItemBlock
+              title={PACK_LINE_ITEM_META[2].title}
               image={IMG.item3}
               imageOverlay
               itemId={PACK_LINE_ITEM_META[2].id}
@@ -3684,7 +3734,28 @@ export default function ReadyToPack() {
                 </>
               }
               packaging={null}
-            />
+              />
+            ) : null}
+
+            {extraPackItems.map((item) => (
+              <Box key={item.id}>
+                <Divider sx={{ my: 2 }} />
+                <ItemBlock
+                  title={item.title}
+                  image={item.image}
+                  itemId={item.id}
+                  itemRemarkCount={remarkCountByItemId[item.id] ?? 0}
+                  onItemRemarksClick={() => openItemRemarksDialog(item.id)}
+                  details={
+                    <>
+                      <SectionOverline>Details</SectionOverline>
+                      <DetailRow label="Source:" value="Joined shipment" />
+                    </>
+                  }
+                  packaging={null}
+                />
+              </Box>
+            ))}
 
             {!isSortingStationView &&
             packingOrderUiStatus !== "cancelled" &&
@@ -3710,7 +3781,7 @@ export default function ReadyToPack() {
                     }
                     label={
                       <Typography variant="h6" sx={{ color: "primary.dark", fontSize: 20, fontWeight: 500 }}>
-                        I reviewed and packed {PACK_ITEM_COUNT} items
+                        I reviewed and packed {packItemCount} items
                       </Typography>
                     }
                     sx={{
@@ -3801,6 +3872,38 @@ export default function ReadyToPack() {
                     }}
                   />
                 </Stack>
+                {isSimilarOrdersView ? (
+                  <>
+                    <Divider />
+                    <Alert
+                      severity="info"
+                      variant="standard"
+                      icon={<InfoOutlinedIcon />}
+                      sx={{
+                        alignItems: "center",
+                        py: 1.5,
+                        px: 2,
+                        borderRadius: 1,
+                        border: "none",
+                        boxShadow: "none",
+                        bgcolor: lightBlue[50],
+                        color: lightBlue[900],
+                        "& .MuiAlert-icon": {
+                          color: lightBlue[900],
+                          alignSelf: "center",
+                        },
+                        "& .MuiAlert-message": {
+                          width: "100%",
+                          color: lightBlue[900],
+                          display: "flex",
+                          alignItems: "center",
+                        },
+                      }}
+                    >
+                      This shipment has a similar order.
+                    </Alert>
+                  </>
+                ) : null}
                 {packingOrderUiStatus === "pending" && sentToFixReason ? (
                   <>
                     <Divider />
@@ -4069,8 +4172,8 @@ export default function ReadyToPack() {
                     }}
                   >
                     {trackingManualMode
-                      ? `manual pack ${PACK_ITEM_COUNT} items`
-                      : `pack ${PACK_ITEM_COUNT} items`}
+                      ? `manual pack ${packItemCount} items`
+                      : `pack ${packItemCount} items`}
                   </Button>
                   <Stack direction="row" spacing={1}>
                     {!orderPacked && (
@@ -4233,6 +4336,11 @@ export default function ReadyToPack() {
           open={joinShipmentDialogOpen}
           onClose={() => setJoinShipmentDialogOpen(false)}
           currentShipmentId={joinDialogShipmentId}
+          prefillSourceShipmentId={joinPrefillSourceShipmentId}
+          onConfirm={(nextCurrentItems) => {
+            setPackItems(nextCurrentItems.map((x) => ({ ...x, movable: false })));
+            setItemsReviewed(false);
+          }}
         />
       )}
       {loadedOrderId && (
@@ -4240,6 +4348,10 @@ export default function ReadyToPack() {
           open={splitShipmentDialogOpen}
           onClose={() => setSplitShipmentDialogOpen(false)}
           currentShipmentId={joinDialogShipmentId}
+          onConfirm={(nextCurrentItems) => {
+            setPackItems(nextCurrentItems.map((x) => ({ ...x, movable: false })));
+            setItemsReviewed(false);
+          }}
         />
       )}
       {loadedOrderId && itemRemarksItemId ? (
@@ -4286,6 +4398,7 @@ function ItemBlock({
   itemRemarkCount?: number;
   onItemRemarksClick?: () => void;
 }) {
+  const canOpenRemarks = itemRemarkCount > 0;
   return (
     <Stack spacing={2} sx={{ width: "100%", alignSelf: "stretch" }}>
       <Stack
@@ -4299,36 +4412,36 @@ function ItemBlock({
           {title}
         </Typography>
         {itemId != null && onItemRemarksClick != null ? (
-          <Tooltip title={itemRemarkCount > 0 ? `Item remarks (${itemRemarkCount})` : "Add item remark"}>
-            <IconButton
-              aria-label={
-                itemRemarkCount > 0
-                  ? `Item remarks, ${itemRemarkCount} message${itemRemarkCount === 1 ? "" : "s"}`
-                  : "Add item remark"
-              }
-              onClick={(e) => {
-                e.stopPropagation();
-                onItemRemarksClick();
-              }}
-              size="small"
-              sx={{
-                flexShrink: 0,
-                alignSelf: "flex-start",
-                mt: -0.25,
-                bgcolor: "background.paper",
-                boxShadow: 1,
-                "&:hover": { bgcolor: "grey.100" },
-              }}
-            >
-              <Badge
-                color="primary"
-                badgeContent={itemRemarkCount > 0 ? itemRemarkCount : undefined}
-                invisible={itemRemarkCount === 0}
-                sx={{ "& .MuiBadge-badge": { fontSize: 10, minWidth: 18, height: 18 } }}
+          <Tooltip title={`Item remarks (${itemRemarkCount})`}>
+            <Box component="span">
+              <IconButton
+                aria-label={`Item remarks (${itemRemarkCount})`}
+                disabled={!canOpenRemarks}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!canOpenRemarks) return;
+                  onItemRemarksClick();
+                }}
+                size="small"
+                sx={{
+                  flexShrink: 0,
+                  alignSelf: "flex-start",
+                  mt: -0.25,
+                  bgcolor: "background.paper",
+                  boxShadow: 1,
+                  "&:hover": { bgcolor: "grey.100" },
+                }}
               >
-                <ChatBubbleOutlineIcon sx={{ fontSize: 20 }} />
-              </Badge>
-            </IconButton>
+                <Badge
+                  color="primary"
+                  badgeContent={itemRemarkCount > 0 ? itemRemarkCount : undefined}
+                  invisible={itemRemarkCount === 0}
+                  sx={{ "& .MuiBadge-badge": { fontSize: 10, minWidth: 18, height: 18 } }}
+                >
+                  <ChatBubbleOutlineIcon sx={{ fontSize: 20 }} />
+                </Badge>
+              </IconButton>
+            </Box>
           </Tooltip>
         ) : null}
       </Stack>
