@@ -113,6 +113,18 @@ const MORE_ACTIONS_MENU_ITEMS_PACKED = [
   { id: "reprint-packing-label", label: "Reprint Packing Label", Icon: LocalPrintshopOutlinedIcon },
 ] as const;
 
+/** Muted outlined dismiss actions in modals (secondary tone; not primary black/blue). */
+const DIALOG_CANCEL_BUTTON_SX = {
+  textTransform: "uppercase" as const,
+  color: "text.secondary",
+  borderColor: "divider",
+  "&:hover": {
+    color: "text.secondary",
+    borderColor: "action.active",
+    bgcolor: "action.hover",
+  },
+};
+
 const IMG = {
   item1: product1Img,
   boxMedium: boxMediumImg,
@@ -533,6 +545,7 @@ function ShipmentFieldActionLink({
   );
 }
 
+/** Action link row: collapsed in locked view; smooth height expand when unlocked (grid columns unchanged). */
 function ShipmentFieldActionArea({
   visible,
   children,
@@ -541,17 +554,28 @@ function ShipmentFieldActionArea({
   children: ReactNode;
 }) {
   return (
-    <Box
+    <Collapse
+      in={visible}
+      collapsedSize={0}
+      timeout="auto"
       sx={{
-        overflow: "hidden",
-        maxHeight: visible ? 28 : 0,
-        opacity: visible ? 1 : 0,
-        transition: "max-height 180ms ease, opacity 180ms ease",
-        pointerEvents: visible ? "auto" : "none",
+        width: "100%",
+        alignSelf: "stretch",
+        "& .MuiCollapse-wrapper": { width: "100%" },
+        "& .MuiCollapse-wrapperInner": { width: "100%" },
       }}
     >
-      {children}
-    </Box>
+      <Box
+        sx={{
+          display: "flex",
+          alignItems: "center",
+          minHeight: 28,
+          width: "100%",
+        }}
+      >
+        {children}
+      </Box>
+    </Collapse>
   );
 }
 
@@ -1105,7 +1129,7 @@ function UpdateAddressDialog({
       </DialogContent>
       <Divider />
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", alignItems: "center" }}>
-        <Button variant="outlined" color="inherit" onClick={onClose} sx={{ textTransform: "uppercase" }}>
+        <Button variant="outlined" onClick={onClose} sx={DIALOG_CANCEL_BUTTON_SX}>
           Cancel
         </Button>
         <Stack direction="row" spacing={1.5}>
@@ -1455,9 +1479,8 @@ function SendToFixDialog({
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
         <Button
           variant="outlined"
-          color="primary"
           onClick={onClose}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75 }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.75 }}
         >
           Cancel
         </Button>
@@ -1654,7 +1677,11 @@ function ShipmentPendingDialog({
           gap: 2,
         }}
       >
-        <Button variant="text" color="primary" onClick={onCancel} sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1 }}>
+        <Button
+          variant="outlined"
+          onClick={onCancel}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.5 }}
+        >
           Cancel
         </Button>
         <Button
@@ -2037,9 +2064,8 @@ function JoinShipmentDialog({
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
         <Button
           variant="outlined"
-          color="inherit"
           onClick={onClose}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75, borderColor: "grey.400", color: "text.primary" }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.75 }}
         >
           Cancel
         </Button>
@@ -2387,9 +2413,8 @@ function SplitShipmentDialog({
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
         <Button
           variant="outlined"
-          color="inherit"
           onClick={onClose}
-          sx={{ textTransform: "uppercase", letterSpacing: "0.46px", py: 1, px: 2.75, borderColor: "grey.400", color: "text.primary" }}
+          sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px", py: 1, px: 2.75 }}
         >
           Cancel
         </Button>
@@ -2696,7 +2721,7 @@ function CreateRemarkDialog({
       </DialogContent>
       <Divider sx={{ flexShrink: 0 }} />
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between", flexShrink: 0 }}>
-        <Button variant="outlined" color="inherit" onClick={onClose} sx={{ textTransform: "uppercase", letterSpacing: "0.46px" }}>
+        <Button variant="outlined" onClick={onClose} sx={{ ...DIALOG_CANCEL_BUTTON_SX, letterSpacing: "0.46px" }}>
           Cancel
         </Button>
         <Button
@@ -2869,7 +2894,7 @@ function CarrierShippingRouteDialog({
       </DialogContent>
       <Divider />
       <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between" }}>
-        <Button variant="outlined" color="inherit" onClick={onClose} sx={{ textTransform: "uppercase" }}>
+        <Button variant="outlined" onClick={onClose} sx={DIALOG_CANCEL_BUTTON_SX}>
           Cancel
         </Button>
         <Button
@@ -2932,6 +2957,8 @@ export default function ReadyToPack() {
   const [trackingManualMode, setTrackingManualMode] = useState(false);
   const [manualTrackingInput, setManualTrackingInput] = useState("");
   const [trackingLoadPending, setTrackingLoadPending] = useState(false);
+  /** True after a successful Tracking ID “Load” from API for the current manual session; reset when leaving manual or loading an order. */
+  const manualTrackingLoadedFromApiRef = useRef(false);
   const [activeCarrierRouteId, setActiveCarrierRouteId] = useState(INITIAL_CARRIER_ROUTE_ID);
   const [carrierRouteDialogOpen, setCarrierRouteDialogOpen] = useState(false);
   const [savedShipmentAddress, setSavedShipmentAddress] = useState<AddressForm>({ ...DEFAULT_ADDRESS_FORM });
@@ -3204,6 +3231,7 @@ export default function ReadyToPack() {
     setShipmentDetailsEditUnlocked(false);
     setTrackingManualMode(false);
     setManualTrackingInput("");
+    manualTrackingLoadedFromApiRef.current = false;
     setTrackingLoadPending(false);
     setActiveCarrierRouteId(INITIAL_CARRIER_ROUTE_ID);
     setCarrierRouteDialogOpen(false);
@@ -3365,6 +3393,7 @@ export default function ReadyToPack() {
     try {
       const id = await loadTrackingNumberFromApi(loadedOrderId);
       setManualTrackingInput(id);
+      manualTrackingLoadedFromApiRef.current = String(id).trim() !== "";
     } catch (err) {
       console.error(err);
     } finally {
@@ -3645,12 +3674,22 @@ export default function ReadyToPack() {
                 <Typography variant="h6" sx={{ color: "primary.dark" }}>
                   Shipment Details
                 </Typography>
-                <Tooltip title={shipmentDetailsEditUnlocked ? "Lock edit" : "Unlock Edit"}>
+                <Tooltip title={shipmentDetailsEditUnlocked ? "Lock Details" : "Unlock Details"}>
                   <IconButton
                     size="small"
-                    aria-label={shipmentDetailsEditUnlocked ? "Lock shipment details edit" : "Unlock shipment details edit"}
+                    aria-label={shipmentDetailsEditUnlocked ? "Lock shipment details" : "Unlock shipment details"}
                     aria-pressed={shipmentDetailsEditUnlocked}
-                    onClick={() => setShipmentDetailsEditUnlocked((open) => !open)}
+                    onClick={() => {
+                      setShipmentDetailsEditUnlocked((open) => {
+                        if (open) {
+                          if (trackingManualMode && !manualTrackingLoadedFromApiRef.current) {
+                            setTrackingManualMode(false);
+                            setManualTrackingInput("");
+                          }
+                        }
+                        return !open;
+                      });
+                    }}
                   >
                     {shipmentDetailsEditUnlocked ? (
                       <LockOpenOutlinedIcon fontSize="small" />
@@ -3668,98 +3707,106 @@ export default function ReadyToPack() {
               />
             </Stack>
 
-            <Stack
-              direction="row"
-              alignItems="stretch"
-              useFlexGap
-              spacing={2}
+            <Box
               sx={{
+                display: "grid",
                 width: "100%",
                 minWidth: 0,
-                overflowX: "auto",
-                flexWrap: "nowrap",
+                columnGap: 2,
+                rowGap: 0,
+                alignItems: "start",
                 justifyContent: "space-between",
+                overflowX: "auto",
                 pb: 0.5,
+                gridTemplateColumns:
+                  "minmax(118px, max-content) 145px minmax(100px, max-content) minmax(188px, max-content) 1px minmax(92px, max-content) minmax(99px, max-content) minmax(100px, max-content) minmax(52px, max-content) minmax(80px, max-content)",
               }}
             >
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Shipment ID">
-                    <Stack direction="row" alignItems="center" spacing={1}>
-                      <DetailValue>{displayedShipmentId}</DetailValue>
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Shipment ID">
+                  <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, width: "100%" }}>
+                    <DetailValue>{displayedShipmentId}</DetailValue>
+                    <Box
+                      sx={{
+                        width: 28,
+                        height: 28,
+                        flexShrink: 0,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
+                    >
                       {shipmentDetailsEditUnlocked ? (
                         <Tooltip title="Merukazim">
-                          <NorthEastIcon sx={{ color: "text.secondary", fontSize: 20, flexShrink: 0 }} />
+                          <NorthEastIcon sx={{ color: "text.secondary", fontSize: 20 }} />
                         </Tooltip>
                       ) : null}
-                    </Stack>
-                  </FieldBlock>
+                    </Box>
+                  </Stack>
+                </FieldBlock>
               </Box>
-              <Box
-                sx={{
-                  flex: "0 0 auto",
-                  alignSelf: "flex-start",
-                  minWidth: 0,
-                  maxWidth: "100%",
-                  ...(trackingManualMode ? { minWidth: { xs: 220, sm: 280 } } : {}),
-                }}
-              >
-                  <FieldBlock label="Tracking ID">
-                    {trackingManualMode ? (
-                      <Stack spacing={0.5} sx={{ alignItems: "flex-start", minWidth: 0, maxWidth: "100%" }}>
-                        <Stack
-                          direction="row"
-                          alignItems="center"
-                          spacing={0.5}
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Tracking ID">
+                  {trackingManualMode ? (
+                    <Stack
+                      spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
+                      sx={{ alignItems: "flex-start", minWidth: 0, width: "100%", maxWidth: 145 }}
+                    >
+                      <Stack
+                        direction="row"
+                        alignItems="center"
+                        spacing={0.5}
+                        sx={{
+                          borderBottom: "1px solid",
+                          borderColor: "divider",
+                          pb: 0.25,
+                          minHeight: 36,
+                          width: "100%",
+                          minWidth: 0,
+                        }}
+                      >
+                        <Tooltip title="Load">
+                          <Box component="span" sx={{ display: "inline-flex", flexShrink: 0 }}>
+                            <IconButton
+                              size="small"
+                              aria-label="Load tracking number from API"
+                              disabled={trackingLoadPending || !loadedOrderId}
+                              onClick={() => {
+                                void handleLoadTrackingNumber();
+                              }}
+                              sx={{ color: "primary.dark" }}
+                            >
+                              <SyncIcon fontSize="small" />
+                            </IconButton>
+                          </Box>
+                        </Tooltip>
+                        <InputBase
+                          placeholder="Enter/Load ID"
+                          value={manualTrackingInput}
+                          onChange={(e) => setManualTrackingInput(e.target.value)}
+                          inputProps={{ "aria-label": "Manual tracking ID" }}
                           sx={{
-                            borderBottom: "1px solid",
-                            borderColor: "divider",
-                            pb: 0.25,
-                            minHeight: 36,
-                            width: "fit-content",
-                            maxWidth: "100%",
+                            typography: "body1",
+                            letterSpacing: "0.15px",
+                            flex: "1 1 0",
                             minWidth: 0,
-                          }}
-                        >
-                          <Tooltip title="Load">
-                            <Box component="span" sx={{ display: "inline-flex", flexShrink: 0 }}>
-                              <IconButton
-                                size="small"
-                                aria-label="Load tracking number from API"
-                                disabled={trackingLoadPending || !loadedOrderId}
-                                onClick={() => {
-                                  void handleLoadTrackingNumber();
-                                }}
-                                sx={{ color: "primary.main" }}
-                              >
-                                <SyncIcon fontSize="small" />
-                              </IconButton>
-                            </Box>
-                          </Tooltip>
-                          <InputBase
-                            placeholder="Enter/Load ID"
-                            value={manualTrackingInput}
-                            onChange={(e) => setManualTrackingInput(e.target.value)}
-                            inputProps={{ "aria-label": "Manual tracking ID" }}
-                            sx={{
-                              typography: "body1",
-                              letterSpacing: "0.15px",
-                              flex: "0 1 auto",
+                            width: "100%",
+                            "& input": {
+                              width: "100%",
                               minWidth: 0,
-                              maxWidth: "100%",
-                              "& input": {
-                                minWidth: `${Math.max(14, manualTrackingInput.length, 12)}ch`,
-                                width: "auto",
-                                fieldSizing: "content",
-                              },
-                              "& input::placeholder": { opacity: 1, color: "action.disabled" },
-                            }}
-                          />
-                        </Stack>
+                              textOverflow: "ellipsis",
+                            },
+                            "& input::placeholder": { opacity: 1, color: "action.disabled" },
+                          }}
+                        />
+                      </Stack>
+                      <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
                         <Link
                           component="button"
                           type="button"
                           underline="hover"
                           onClick={() => {
+                            manualTrackingLoadedFromApiRef.current = false;
                             setTrackingManualMode(false);
                             setManualTrackingInput("");
                           }}
@@ -3773,117 +3820,157 @@ export default function ReadyToPack() {
                             background: "none",
                             padding: 0,
                             font: "inherit",
-                            color: "primary.main",
+                            color: "primary.dark",
                             textAlign: "left",
                           }}
                         >
                           Remove Manual ID
                         </Link>
-                      </Stack>
-                    ) : (
-                      <Stack spacing={0.5} sx={{ alignItems: "flex-start", minWidth: 0, maxWidth: "100%" }}>
-                        <DetailValue>None</DetailValue>
-                        <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
-                          <ShipmentFieldActionLink onClick={() => setTrackingManualMode(true)}>
-                            Add Manual ID
-                          </ShipmentFieldActionLink>
-                        </ShipmentFieldActionArea>
-                      </Stack>
-                    )}
-                  </FieldBlock>
-              </Box>
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Carrier Route">
-                    <Stack spacing={0.5}>
-                      <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 28 }}>
-                        {activeCarrierLogoSrc ? (
-                          <Box
-                            component="img"
-                            src={activeCarrierLogoSrc}
-                            alt={activeRoute.carrier}
-                            sx={{ height: 28, width: "auto", maxWidth: 96, objectFit: "contain", display: "block" }}
-                          />
-                        ) : (
-                          <DetailValue>{formatCarrierRouteDisplay(activeRoute)}</DetailValue>
-                        )}
-                      </Stack>
-                      <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
-                        <ShipmentFieldActionLink onClick={() => setCarrierRouteDialogOpen(true)}>
-                          Edit Shipping Route
-                        </ShipmentFieldActionLink>
                       </ShipmentFieldActionArea>
                     </Stack>
-                  </FieldBlock>
-              </Box>
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Destination">
-                    <Stack spacing={0.5}>
-                      <DetailValue>{destinationDisplay}</DetailValue>
-                      <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
-                        <ShipmentFieldActionLink onClick={() => setAddressDialogOpen(true)}>
-                          Update Address
-                        </ShipmentFieldActionLink>
-                      </ShipmentFieldActionArea>
-                    </Stack>
-                  </FieldBlock>
-              </Box>
-              <Divider
-                orientation="vertical"
-                flexItem
-                sx={{
-                  borderColor: "divider",
-                  alignSelf: "stretch",
-                  flexShrink: 0,
-                }}
-              />
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Order Number">
-                    <Stack spacing={0.5}>
-                      <DetailValue>{displayedOrderNumberForDetails ?? ""}</DetailValue>
-                      <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
-                        <ShipmentFieldActionLink onClick={() => setOrderHistoryDialogOpen(true)}>
-                          View History
-                        </ShipmentFieldActionLink>
-                      </ShipmentFieldActionArea>
-                    </Stack>
-                  </FieldBlock>
-              </Box>
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Order Date">
-                    <DetailValue>12/12/2024</DetailValue>
-                  </FieldBlock>
-              </Box>
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Due Date">
-                    <DetailValue>12/23/2024</DetailValue>
-                  </FieldBlock>
-              </Box>
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Site ID">
-                    <DetailValue>27</DetailValue>
-                  </FieldBlock>
-              </Box>
-              <Box sx={{ flex: "0 0 auto", alignSelf: "flex-start", minWidth: 0 }}>
-                  <FieldBlock label="Event">
-                    <Box
-                      sx={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        bgcolor: pink[50],
-                        color: pink.A700,
-                        px: 1.25,
-                        py: 0.5,
-                        borderRadius: 1,
-                        typography: "body1",
-                        fontWeight: 500,
-                        letterSpacing: "0.15px",
-                      }}
+                  ) : (
+                    <Stack
+                      spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
+                      sx={{ alignItems: "flex-start", minWidth: 0, width: "100%" }}
                     >
-                      51-20E
-                    </Box>
-                  </FieldBlock>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          height: 36,
+                          width: "100%",
+                          boxSizing: "border-box",
+                          borderBottom: "1px solid transparent",
+                          pb: 0.25,
+                        }}
+                      >
+                        <DetailValue>None</DetailValue>
+                      </Box>
+                      <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                        <ShipmentFieldActionLink
+                          onClick={() => {
+                            manualTrackingLoadedFromApiRef.current = false;
+                            setTrackingManualMode(true);
+                          }}
+                        >
+                          Add Manual ID
+                        </ShipmentFieldActionLink>
+                      </ShipmentFieldActionArea>
+                    </Stack>
+                  )}
+                </FieldBlock>
               </Box>
-            </Stack>
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Carrier Route">
+                  <Stack
+                    spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
+                    sx={{ width: "100%", minWidth: 0 }}
+                  >
+                    <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 28 }}>
+                      {activeCarrierLogoSrc ? (
+                        <Box
+                          component="img"
+                          src={activeCarrierLogoSrc}
+                          alt={activeRoute.carrier}
+                          sx={{ height: 28, width: "auto", maxWidth: 96, objectFit: "contain", display: "block" }}
+                        />
+                      ) : (
+                        <DetailValue>{formatCarrierRouteDisplay(activeRoute)}</DetailValue>
+                      )}
+                    </Stack>
+                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                      <ShipmentFieldActionLink onClick={() => setCarrierRouteDialogOpen(true)}>
+                        Edit Shipping Route
+                      </ShipmentFieldActionLink>
+                    </ShipmentFieldActionArea>
+                  </Stack>
+                </FieldBlock>
+              </Box>
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Destination">
+                  <Stack
+                    spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
+                    sx={{ width: "100%", minWidth: 0 }}
+                  >
+                    <Typography
+                      variant="body1"
+                      color="text.primary"
+                      letterSpacing="0.15px"
+                      sx={{ wordBreak: "break-word" }}
+                    >
+                      {destinationDisplay}
+                    </Typography>
+                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                      <ShipmentFieldActionLink onClick={() => setAddressDialogOpen(true)}>
+                        Update Address
+                      </ShipmentFieldActionLink>
+                    </ShipmentFieldActionArea>
+                  </Stack>
+                </FieldBlock>
+              </Box>
+              <Box
+                sx={{
+                  width: 1,
+                  minWidth: 1,
+                  alignSelf: "stretch",
+                  justifySelf: "center",
+                  mx: 0,
+                  minHeight: 0,
+                  bgcolor: "divider",
+                }}
+                aria-hidden
+              />
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Order Number">
+                  <Stack
+                    spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
+                    sx={{ width: "100%", minWidth: 0 }}
+                  >
+                    <DetailValue>{displayedOrderNumberForDetails ?? ""}</DetailValue>
+                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                      <ShipmentFieldActionLink onClick={() => setOrderHistoryDialogOpen(true)}>
+                        View History
+                      </ShipmentFieldActionLink>
+                    </ShipmentFieldActionArea>
+                  </Stack>
+                </FieldBlock>
+              </Box>
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Order Date">
+                  <DetailValue>12/12/2024</DetailValue>
+                </FieldBlock>
+              </Box>
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Due Date">
+                  <DetailValue>12/23/2024</DetailValue>
+                </FieldBlock>
+              </Box>
+              <Box sx={{ minWidth: 0, width: "100%" }}>
+                <FieldBlock label="Site ID">
+                  <DetailValue>27</DetailValue>
+                </FieldBlock>
+              </Box>
+              <Box sx={{ minWidth: 0, width: "max-content", maxWidth: "100%", justifySelf: "start" }}>
+                <FieldBlock label="Event">
+                  <Box
+                    sx={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      bgcolor: pink[50],
+                      color: pink.A700,
+                      px: 1.25,
+                      py: 0.5,
+                      borderRadius: 1,
+                      typography: "body1",
+                      fontWeight: 500,
+                      letterSpacing: "0.15px",
+                    }}
+                  >
+                    51-20E
+                  </Box>
+                </FieldBlock>
+              </Box>
+            </Box>
           </Stack>
         </Paper>
 

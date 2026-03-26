@@ -2,7 +2,7 @@ import { createTheme } from "@mui/material/styles";
 
 export const theme = createTheme({
   palette: {
-    primary: { main: "#1976d2", dark: "#01579b" },
+    primary: { main: "#1976d2", dark: "rgba(1, 87, 155, 1)" },
     background: { default: "#f9f9fb", paper: "#ffffff" },
     text: { primary: "rgba(0,0,0,0.87)", secondary: "rgba(0,0,0,0.6)" },
     divider: "rgba(0,0,0,0.12)",
@@ -14,6 +14,16 @@ export const theme = createTheme({
   },
   shape: { borderRadius: 8 },
   components: {
+    MuiButton: {
+      styleOverrides: {
+        containedPrimary: {
+          borderRadius: "50px",
+        },
+        outlinedPrimary: {
+          borderRadius: "50px",
+        },
+      },
+    },
     MuiPaper: {
       styleOverrides: {
         elevation1: {
