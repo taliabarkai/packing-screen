@@ -258,6 +258,7 @@ const PROTOTYPE_SEARCH_KEYWORDS = [
   "pending",
   "manual",
   "fallback",
+  "fallback-supervisor",
   "sort",
   "hold",
   "similar",
@@ -276,6 +277,8 @@ const PROTOTYPE_MANUAL_PACK_ORDER_ID = "manual";
 const PROTOTYPE_MANUAL_PACK_TRACKING_DEMO = "DEMO-TRACK-001";
 /** Prototype: Pack → loading → failed carrier API (Figma 1762:35805). Search `fallback`. */
 const PROTOTYPE_FALLBACK_ORDER_ID = "fallback";
+/** Same prototype order as `fallback` but selects supervisor account (alias: `fallback_supervisor`). Or toggle packer/supervisor in the header. */
+const PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH = "fallback-supervisor";
 const PROTOTYPE_FALLBACK_PACK_ERROR_TITLE = "API Connection Failed";
 const PROTOTYPE_FALLBACK_PACK_ERROR_DETAIL = "FEDEX_ERROR: Invalid postal code for destination";
 
@@ -432,7 +435,12 @@ function normalizeOrderIdForLoad(raw: string): string {
   if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "fix") return PROTOTYPE_PENDING_ORDER_ID;
   if (lower === PROTOTYPE_MANUAL_PACK_ORDER_ID || lower === "manualpack" || lower === "manual-pack")
     return PROTOTYPE_MANUAL_PACK_ORDER_ID;
-  if (lower === PROTOTYPE_FALLBACK_ORDER_ID) return PROTOTYPE_FALLBACK_ORDER_ID;
+  if (
+    lower === PROTOTYPE_FALLBACK_ORDER_ID ||
+    lower === PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH ||
+    lower === "fallback_supervisor"
+  )
+    return PROTOTYPE_FALLBACK_ORDER_ID;
   if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
@@ -3880,6 +3888,10 @@ export default function ReadyToPack() {
     }
     setNotFoundQuery(null);
     setOrderBrowseStack([]);
+    const lowerRaw = trimmed.toLowerCase();
+    if (lowerRaw === PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH || lowerRaw === "fallback_supervisor") {
+      setPrototypeAccountRole("supervisor");
+    }
     setLoadedOrderId(id);
     if (id === PROTOTYPE_SPLIT_ORDER_ID) {
       setSplitLinkedPair(null);
@@ -4201,7 +4213,11 @@ export default function ReadyToPack() {
             disableSticky
             sx={{ typography: "caption", color: "text.secondary", lineHeight: 1.4, py: 1, px: 2 }}
           >
-            Tap a keyword to run search
+            Tap a keyword to run search.{" "}
+            <Box component="span" sx={{ fontFamily: "ui-monospace, monospace" }}>
+              fallback-supervisor
+            </Box>{" "}
+            opens the fallback flow as supervisor; you can also switch account in the header.
           </ListSubheader>
           {PROTOTYPE_SEARCH_KEYWORDS.map((kw) => (
             <MenuItem
