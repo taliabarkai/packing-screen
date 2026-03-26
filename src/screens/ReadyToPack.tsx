@@ -50,7 +50,7 @@ import {
   Tooltip,
   Typography,
 } from "@mui/material";
-import { alpha, useTheme } from "@mui/material/styles";
+import { alpha, keyframes, useTheme } from "@mui/material/styles";
 import { lightBlue, orange, pink, purple, red } from "@mui/material/colors";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
@@ -251,6 +251,22 @@ const elevationSx = {
     "0px 1px 3px 0px rgba(0,0,0,0.12), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 2px 1px 0px rgba(0,0,0,0.2)",
 };
 
+/** Short “pop” on the main Pack CTA when an order transitions to packed (Pack click or Fallback manual pack). */
+const packSuccessPop = keyframes`
+  0% {
+    transform: scale(1);
+  }
+  38% {
+    transform: scale(1.06);
+  }
+  68% {
+    transform: scale(0.97);
+  }
+  100% {
+    transform: scale(1);
+  }
+`;
+
 const ORDER_SEARCH_PLACEHOLDER = "Scan barcode or search by order/shipment ID";
 /** Demo search shortcuts (help menu in search bar); values match `normalizeOrderIdForLoad`. */
 const PROTOTYPE_SEARCH_KEYWORDS = [
@@ -277,7 +293,7 @@ const PROTOTYPE_MANUAL_PACK_ORDER_ID = "manual";
 const PROTOTYPE_MANUAL_PACK_TRACKING_DEMO = "DEMO-TRACK-001";
 /** Prototype: Pack → loading → failed carrier API (Figma 1762:35805). Search `fallback`. */
 const PROTOTYPE_FALLBACK_ORDER_ID = "fallback";
-/** Same prototype order as `fallback` but selects supervisor account (alias: `fallback_supervisor`). Or toggle packer/supervisor in the header. */
+/** Same prototype order as `fallback` but selects supervisor (Elena) + Kiryat Gat factory (alias: `fallback_supervisor`). Or use header toggles. */
 const PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH = "fallback-supervisor";
 const PROTOTYPE_FALLBACK_PACK_ERROR_TITLE = "API Connection Failed";
 const PROTOTYPE_FALLBACK_PACK_ERROR_DETAIL = "FEDEX_ERROR: Invalid postal code for destination";
@@ -1894,7 +1910,7 @@ function FallbackPackDialog({
     ) : (
       <Button
         variant="contained"
-        color="primary"
+        color="warning"
         disabled={!manualTrackingId.trim()}
         onClick={() => {
           const tid = manualTrackingId.trim();
@@ -1905,12 +1921,18 @@ function FallbackPackDialog({
         sx={{
           px: 2.75,
           py: 1,
+          borderRadius: "50px",
           textTransform: "uppercase",
           fontWeight: 500,
           fontSize: 15,
           letterSpacing: "0.46px",
           boxShadow:
             "0px 3px 1px -2px rgba(0,0,0,0.2), 0px 2px 2px 0px rgba(0,0,0,0.14), 0px 1px 5px 0px rgba(0,0,0,0.12)",
+          "&:not(.Mui-disabled)": {
+            bgcolor: "#ed6c02",
+            color: "#fff",
+            "&:hover": { bgcolor: "#e65100" },
+          },
         }}
       >
         Manual Pack
@@ -3421,6 +3443,7 @@ export default function ReadyToPack() {
   const [fallbackPackSubmitPhase, setFallbackPackSubmitPhase] = useState<"idle" | "loading" | "failed">("idle");
   const [fallbackPackDialogOpen, setFallbackPackDialogOpen] = useState(false);
   const fallbackPackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [packSuccessAnimNonce, setPackSuccessAnimNonce] = useState(0);
   const [sentToFixReason, setSentToFixReason] = useState<string | null>(null);
   /** After OK/Cancel, hide the pending notice until `loadedOrderId` changes again. */
   const [pendingShipmentDialogDismissed, setPendingShipmentDialogDismissed] = useState(false);
@@ -3455,6 +3478,11 @@ export default function ReadyToPack() {
   const isSimilarOrdersView = isPrototypeSimilarOrdersId(loadedOrderId);
   const isSplitOrdersView = isPrototypeSplitOrdersId(loadedOrderId);
   const isFallbackPrototype = isPrototypeFallbackOrderId(loadedOrderId);
+  const showFallbackPackButton =
+    isFallbackPrototype &&
+    packingOrderUiStatus === "packApiFailed" &&
+    fallbackPackSubmitPhase === "failed" &&
+    prototypeAccountRole === "supervisor";
   /** On-hold + sorting: per-line container row (sorting = “Scan to Assign” until scanned; on-hold skips gift kit). */
   const showItemContainerAssignRow = packingOrderUiStatus === "onHold" || isSortingStationView;
 
@@ -3668,6 +3696,7 @@ export default function ReadyToPack() {
       clearTimeout(fallbackPackTimerRef.current);
       fallbackPackTimerRef.current = null;
     }
+    setPackSuccessAnimNonce(0);
     setFallbackPackSubmitPhase("idle");
     setItemsReviewed(false);
     const isFixQueue = isPrototypePendingOrderId(loadedOrderId);
@@ -3891,6 +3920,7 @@ export default function ReadyToPack() {
     const lowerRaw = trimmed.toLowerCase();
     if (lowerRaw === PROTOTYPE_FALLBACK_SUPERVISOR_SEARCH || lowerRaw === "fallback_supervisor") {
       setPrototypeAccountRole("supervisor");
+      setPrototypeFactorySiteView("kiryatGat");
     }
     setLoadedOrderId(id);
     if (id === PROTOTYPE_SPLIT_ORDER_ID) {
@@ -4040,22 +4070,24 @@ export default function ReadyToPack() {
                   ),
                   endAdornment: (
                     <InputAdornment position="end">
-                      <Tooltip title={orderInput.trim() ? "Search" : "Search or pick a demo keyword"}>
+                      <Tooltip
+                        title={
+                          orderInput.trim()
+                            ? "Demo search keywords (press Enter to search)"
+                            : "Search or pick a demo keyword"
+                        }
+                      >
                         <IconButton
                           size="small"
                           edge="end"
-                          aria-label="Search"
-                          aria-haspopup={!orderInput.trim() ? "menu" : undefined}
-                          aria-controls={!orderInput.trim() ? "prototype-demo-search-menu" : undefined}
-                          aria-expanded={
-                            !orderInput.trim() && Boolean(prototypeDemoSearchMenuAnchor) ? true : undefined
-                          }
+                          aria-label="Open demo search keywords"
+                          aria-haspopup="menu"
+                          aria-controls="prototype-demo-search-menu"
+                          aria-expanded={Boolean(prototypeDemoSearchMenuAnchor)}
                           onClick={(e) => {
-                            if (!orderInput.trim()) {
-                              setPrototypeDemoSearchMenuAnchor(e.currentTarget);
-                              return;
-                            }
-                            handleLoadOrder();
+                            setPrototypeDemoSearchMenuAnchor((prev) =>
+                              prev ? null : e.currentTarget,
+                            );
                           }}
                         >
                           <SearchIcon />
@@ -4217,7 +4249,7 @@ export default function ReadyToPack() {
             <Box component="span" sx={{ fontFamily: "ui-monospace, monospace" }}>
               fallback-supervisor
             </Box>{" "}
-            opens the fallback flow as supervisor; you can also switch account in the header.
+            opens the fallback flow as supervisor (Elena) at Kiryat Gat; you can also use the header toggles.
           </ListSubheader>
           {PROTOTYPE_SEARCH_KEYWORDS.map((kw) => (
             <MenuItem
@@ -5675,7 +5707,7 @@ export default function ReadyToPack() {
                 alignItems="center"
                 justifyContent="space-between"
                 spacing={2}
-                sx={{ mb: 0.5, width: "100%", minWidth: 0 }}
+                sx={{ mb: 2, width: "100%", minWidth: 0 }}
               >
                 <Typography variant="h6" sx={{ color: "primary.dark", minWidth: 0 }}>
                   Remarks
@@ -5690,38 +5722,59 @@ export default function ReadyToPack() {
                   Send Message
                 </Link>
               </Stack>
-              <Tabs
-                value={remarksTab}
-                onChange={(_, v: RemarksTabValue) => setRemarksTab(v)}
-                sx={{
-                  minHeight: 40,
-                  mt: 0,
-                  pt: 0,
-                  mb: 2,
-                  borderBottom: 1,
-                  borderColor: "divider",
-                  "& .MuiTab-root": { textTransform: "none", fontWeight: 500, minHeight: 40 },
-                }}
-              >
-                <Tab label="All" value="all" />
-                <Tab label="Packers" value="packing" />
-                <Tab label="CSR" value="csr" />
-              </Tabs>
               <Box
                 sx={{
+                  width: "100%",
+                  minWidth: 0,
                   border: "1px solid",
                   borderColor: "divider",
                   borderRadius: 1,
-                  maxHeight: 220,
-                  overflow: "auto",
-                  width: "100%",
-                  minWidth: 0,
-                  boxSizing: "border-box",
+                  overflow: "hidden",
+                  display: "flex",
+                  flexDirection: "column",
+                  bgcolor: "background.paper",
                 }}
               >
-                {filteredRemarksMessages.map((m) => (
-                  <MessageRow key={m.id} message={m} />
-                ))}
+                <Tabs
+                  value={remarksTab}
+                  onChange={(_, v: RemarksTabValue) => setRemarksTab(v)}
+                  sx={{
+                    minHeight: 36,
+                    m: 0,
+                    p: 0,
+                    px: 0.5,
+                    boxSizing: "border-box",
+                    borderBottom: 1,
+                    borderColor: "divider",
+                    bgcolor: "background.paper",
+                    "& .MuiTabs-flexContainer": { gap: 0.5 },
+                    "& .MuiTab-root": {
+                      textTransform: "none",
+                      fontWeight: 500,
+                      minHeight: 36,
+                      py: 0.75,
+                      px: 1.25,
+                    },
+                  }}
+                >
+                  <Tab label="All" value="all" />
+                  <Tab label="Packers" value="packing" />
+                  <Tab label="CSR" value="csr" />
+                </Tabs>
+                <Box
+                  sx={{
+                    maxHeight: 220,
+                    overflow: "auto",
+                    width: "100%",
+                    minWidth: 0,
+                    flex: "1 1 auto",
+                    boxSizing: "border-box",
+                  }}
+                >
+                  {filteredRemarksMessages.map((m) => (
+                    <MessageRow key={m.id} message={m} />
+                  ))}
+                </Box>
               </Box>
             </Paper>
 
@@ -5737,8 +5790,9 @@ export default function ReadyToPack() {
                   alignSelf: "start",
                 }}
               >
-                <Stack spacing={2}>
+                <Stack spacing={1.5}>
                   <Button
+                    key={packSuccessAnimNonce}
                     fullWidth
                     variant="contained"
                     color="primary"
@@ -5766,6 +5820,7 @@ export default function ReadyToPack() {
                         (!trackingManualMode || manualTrackingInput.trim() !== "")
                       ) {
                         setPackingOrderUiStatus("packed");
+                        setPackSuccessAnimNonce((n) => n + 1);
                       }
                     }}
                     startIcon={
@@ -5793,6 +5848,10 @@ export default function ReadyToPack() {
                       boxSizing: "border-box",
                       fontSize: 18,
                       fontWeight: 500,
+                      transformOrigin: "center center",
+                      ...(packSuccessAnimNonce > 0 && {
+                        animation: `${packSuccessPop} 0.62s cubic-bezier(0.34, 1.45, 0.64, 1)`,
+                      }),
                       ...(trackingManualMode &&
                         packingOrderUiStatus === "readyToPack" &&
                         manualTrackingInput.trim() !== "" && {
@@ -5812,128 +5871,142 @@ export default function ReadyToPack() {
                           ? `Manual Pack ${packItemCountUi} Items`
                           : `Pack ${packItemCountUi} Items`}
                   </Button>
-                  {isFallbackPrototype &&
-                  packingOrderUiStatus === "packApiFailed" &&
-                  fallbackPackSubmitPhase === "failed" &&
-                  prototypeAccountRole === "supervisor" ? (
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="primary"
-                      onClick={() => setFallbackPackDialogOpen(true)}
-                      sx={{
-                        minHeight: 56,
-                        height: 56,
-                        py: 0,
-                        boxSizing: "border-box",
-                        fontSize: 18,
-                        fontWeight: 500,
-                        textTransform: "none",
-                      }}
-                    >
-                      Fallback Pack
-                    </Button>
-                  ) : null}
                   {(!hungaryFactoryDemoActive || orderPacked) ? (
-                  <Stack direction="row" spacing={1}>
-                    {!orderPacked && !hungaryFactoryDemoActive ? (
-                      <Button
-                        fullWidth
-                        variant="outlined"
-                        color="primary"
-                        startIcon={<HandymanOutlinedIcon />}
-                        onClick={() => setSendToFixDialogOpen(true)}
-                        sx={{
-                          minHeight: 56,
-                          height: 56,
-                          py: 0,
-                          boxSizing: "border-box",
-                          fontSize: 18,
-                          fontWeight: 500,
-                          borderColor: "primary.main",
-                          color: "primary.main",
-                        }}
-                      >
-                        Send to Fix
-                      </Button>
-                    ) : null}
-                    <Button
-                      fullWidth
-                      variant="outlined"
-                      color="primary"
-                      id="more-actions-button"
-                      aria-controls={moreActionsMenuAnchor ? "more-actions-menu" : undefined}
-                      aria-expanded={moreActionsMenuAnchor ? "true" : "false"}
-                      aria-haspopup="true"
-                      endIcon={<ExpandMoreIcon />}
-                      onClick={(e) => setMoreActionsMenuAnchor(e.currentTarget)}
-                      sx={{
-                        minHeight: 56,
-                        height: 56,
-                        py: 0,
-                        boxSizing: "border-box",
-                        fontSize: 18,
-                        fontWeight: 500,
-                        borderColor: "primary.main",
-                        color: "primary.main",
-                      }}
-                    >
-                      More Actions
-                    </Button>
-                    <Menu
-                      id="more-actions-menu"
-                      anchorEl={moreActionsMenuAnchor}
-                      open={Boolean(moreActionsMenuAnchor)}
-                      onClose={() => setMoreActionsMenuAnchor(null)}
-                      anchorOrigin={
-                        orderPacked
-                          ? { vertical: "top", horizontal: "right" }
-                          : { vertical: "bottom", horizontal: "right" }
-                      }
-                      transformOrigin={
-                        orderPacked
-                          ? { vertical: "bottom", horizontal: "right" }
-                          : { vertical: "top", horizontal: "right" }
-                      }
-                      slotProps={{
-                        paper: {
-                          elevation: 8,
-                          sx: {
-                            minWidth: 276,
-                            ...(orderPacked ? { mb: 0.5 } : { mt: 0.5 }),
-                            borderRadius: 1,
-                            py: 1,
-                            boxSizing: "border-box",
-                          },
-                        },
-                      }}
-                    >
-                      {moreActionsMenuItems.map(({ id, label, Icon }) => (
-                        <MenuItem
-                          key={id}
-                          onClick={() => {
-                            setMoreActionsMenuAnchor(null);
-                            if (id === "unpack-shipment") {
-                              setPackingOrderUiStatus("readyToPack");
-                              setItemsReviewed(false);
-                            }
-                            if (id === "join-shipment") setJoinShipmentDialogOpen(true);
-                            if (id === "split-shipment") setSplitShipmentDialogOpen(true);
-                          }}
+                    <Stack spacing={0}>
+                      {showFallbackPackButton ? (
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          color="primary"
+                          onClick={() => setFallbackPackDialogOpen(true)}
                           sx={{
-                            py: 0.75,
-                            px: 2,
-                            typography: "body1",
+                            minHeight: 56,
+                            height: 56,
+                            py: 0,
+                            boxSizing: "border-box",
+                            fontSize: 18,
+                            fontWeight: 500,
+                            textTransform: "none",
+                            borderColor: "primary.main",
+                            color: "primary.main",
                           }}
                         >
-                          <ListItemIcon sx={{ minWidth: 36 }}>
-                            <Icon sx={{ fontSize: 20, color: "action.active" }} />
-                          </ListItemIcon>
-                          {label}
-                        </MenuItem>
-                      ))}
-                    </Menu>
-                  </Stack>
+                          Fallback Pack
+                        </Button>
+                      ) : null}
+                      <Stack
+                        direction="row"
+                        spacing={1}
+                        sx={
+                          showFallbackPackButton
+                            ? {
+                                mt: 3,
+                                borderTop: "1px solid",
+                                borderColor: "divider",
+                                pt: 3,
+                              }
+                            : undefined
+                        }
+                      >
+                        {!orderPacked && !hungaryFactoryDemoActive ? (
+                          <Button
+                            fullWidth
+                            variant="outlined"
+                            color="primary"
+                            startIcon={<HandymanOutlinedIcon />}
+                            onClick={() => setSendToFixDialogOpen(true)}
+                            sx={{
+                              minHeight: 56,
+                              height: 56,
+                              py: 0,
+                              boxSizing: "border-box",
+                              fontSize: 18,
+                              fontWeight: 500,
+                              borderColor: "primary.main",
+                              color: "primary.main",
+                            }}
+                          >
+                            Send to Fix
+                          </Button>
+                        ) : null}
+                        <Button
+                          fullWidth
+                          variant="outlined"
+                          color="primary"
+                          id="more-actions-button"
+                          aria-controls={moreActionsMenuAnchor ? "more-actions-menu" : undefined}
+                          aria-expanded={moreActionsMenuAnchor ? "true" : "false"}
+                          aria-haspopup="true"
+                          endIcon={<ExpandMoreIcon />}
+                          onClick={(e) => setMoreActionsMenuAnchor(e.currentTarget)}
+                          sx={{
+                            minHeight: 56,
+                            height: 56,
+                            py: 0,
+                            boxSizing: "border-box",
+                            fontSize: 18,
+                            fontWeight: 500,
+                            borderColor: "primary.main",
+                            color: "primary.main",
+                          }}
+                        >
+                          More Actions
+                        </Button>
+                        <Menu
+                          id="more-actions-menu"
+                          anchorEl={moreActionsMenuAnchor}
+                          open={Boolean(moreActionsMenuAnchor)}
+                          onClose={() => setMoreActionsMenuAnchor(null)}
+                          anchorOrigin={
+                            orderPacked
+                              ? { vertical: "top", horizontal: "right" }
+                              : { vertical: "bottom", horizontal: "right" }
+                          }
+                          transformOrigin={
+                            orderPacked
+                              ? { vertical: "bottom", horizontal: "right" }
+                              : { vertical: "top", horizontal: "right" }
+                          }
+                          slotProps={{
+                            paper: {
+                              elevation: 8,
+                              sx: {
+                                minWidth: 276,
+                                ...(orderPacked ? { mb: 0.5 } : { mt: 0.5 }),
+                                borderRadius: 1,
+                                py: 1,
+                                boxSizing: "border-box",
+                              },
+                            },
+                          }}
+                        >
+                          {moreActionsMenuItems.map(({ id, label, Icon }) => (
+                            <MenuItem
+                              key={id}
+                              onClick={() => {
+                                setMoreActionsMenuAnchor(null);
+                                if (id === "unpack-shipment") {
+                                  setPackingOrderUiStatus("readyToPack");
+                                  setItemsReviewed(false);
+                                }
+                                if (id === "join-shipment") setJoinShipmentDialogOpen(true);
+                                if (id === "split-shipment") setSplitShipmentDialogOpen(true);
+                              }}
+                              sx={{
+                                py: 0.75,
+                                px: 2,
+                                typography: "body1",
+                              }}
+                            >
+                              <ListItemIcon sx={{ minWidth: 36 }}>
+                                <Icon sx={{ fontSize: 20, color: "action.active" }} />
+                              </ListItemIcon>
+                              {label}
+                            </MenuItem>
+                          ))}
+                        </Menu>
+                      </Stack>
+                    </Stack>
                   ) : null}
                 </Stack>
               </Paper>
@@ -5953,6 +6026,11 @@ export default function ReadyToPack() {
           setActiveCarrierRouteId(carrierRouteId);
           setTrackingManualMode(true);
           setManualTrackingInput(tid);
+          manualTrackingLoadedFromApiRef.current = true;
+          setFallbackPackSubmitPhase("idle");
+          setPackingOrderUiStatus("packed");
+          setItemsReviewed(true);
+          setPackSuccessAnimNonce((n) => n + 1);
         }}
       />
       <CarrierShippingRouteDialog
