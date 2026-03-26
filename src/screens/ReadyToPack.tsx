@@ -829,13 +829,13 @@ function ShippingRouteColumnLabels({ route }: { route: ShippingRouteRow }) {
         <Typography variant="caption" color="text.secondary" display="block" sx={{ textTransform: "capitalize" }}>
           Carrier
         </Typography>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ minHeight: 24 }}>
+        <Stack direction="row" alignItems="center" spacing={1} sx={{ minHeight: 28 }}>
           {logoSrc ? (
             <Box
               component="img"
               src={logoSrc}
               alt={route.carrier}
-              sx={{ height: 20, width: "auto", maxWidth: 88, objectFit: "contain", display: "block" }}
+              sx={{ height: 28, width: "auto", maxWidth: 88, objectFit: "contain", display: "block" }}
             />
           ) : (
             <Typography variant="body1" color="text.primary" letterSpacing="0.15px">
@@ -3801,7 +3801,7 @@ export default function ReadyToPack() {
                             component="img"
                             src={activeCarrierLogoSrc}
                             alt={activeRoute.carrier}
-                            sx={{ height: 20, width: "auto", maxWidth: 96, objectFit: "contain", display: "block" }}
+                            sx={{ height: 28, width: "auto", maxWidth: 96, objectFit: "contain", display: "block" }}
                           />
                         ) : (
                           <DetailValue>{formatCarrierRouteDisplay(activeRoute)}</DetailValue>
@@ -5344,6 +5344,7 @@ function ItemHoldAssignContainer({
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
+            pl: 2,
             pr: 1,
             py: 0.5,
             boxSizing: "border-box",
@@ -5365,8 +5366,7 @@ function ItemHoldAssignContainer({
                 flexWrap: "wrap",
                 alignItems: "center",
                 justifyContent: "flex-start",
-                pl: 2,
-                pr: 0.75,
+                px: 0,
                 py: 0.5,
                 gap: 0.5,
                 borderRadius: 0,
@@ -5462,8 +5462,7 @@ function ItemHoldAssignContainer({
       <Box
         sx={{
           flex: "0 0 auto",
-          pl: 2,
-          pr: 1.5,
+          px: 2,
           display: "flex",
           flexDirection: "column",
           justifyContent: "center",
