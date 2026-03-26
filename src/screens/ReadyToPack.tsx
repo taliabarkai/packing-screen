@@ -733,27 +733,20 @@ const SHIPPING_ROUTE_ROWS: ShippingRouteRow[] = [
 ];
 
 const INITIAL_CARRIER_ROUTE_ID = "fedex-express";
-const CARRIER_LOGO_MODULES = import.meta.glob("../assets/ship-*.*", {
-  eager: true,
-  import: "default",
-}) as Record<string, string>;
 
+/** Logos in `public/carriers/` (e.g. `ship-fedex.svg`). */
 function toSlug(v: string) {
   return v.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 }
 
+function carrierLogoPublicUrl(carrierSlug: string) {
+  const base = import.meta.env.BASE_URL;
+  const root = base.endsWith("/") ? base : `${base}/`;
+  return `${root}carriers/ship-${carrierSlug}.svg`;
+}
+
 function findCarrierLogoSrc(route: ShippingRouteRow): string | null {
-  const carrierSlug = toSlug(route.carrier);
-  const routeSlug = toSlug(route.id);
-  const files = Object.entries(CARRIER_LOGO_MODULES).map(([path, src]) => ({
-    src,
-    key: path.split("/").pop()?.toLowerCase() ?? "",
-  }));
-  const byRoute = files.find(({ key }) => key.startsWith(`ship-${routeSlug}.`));
-  if (byRoute) return byRoute.src;
-  const byCarrier = files.find(({ key }) => key.startsWith(`ship-${carrierSlug}.`));
-  if (byCarrier) return byCarrier.src;
-  return null;
+  return carrierLogoPublicUrl(toSlug(route.carrier));
 }
 
 function formatCarrierRouteDisplay(route: ShippingRouteRow) {
