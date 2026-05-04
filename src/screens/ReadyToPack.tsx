@@ -71,7 +71,9 @@ import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import Inventory2OutlinedIcon from "@mui/icons-material/Inventory2Outlined";
+import KeyboardArrowDownIcon from "@mui/icons-material/KeyboardArrowDown";
 import ListAltIcon from "@mui/icons-material/ListAlt";
+import LogoutIcon from "@mui/icons-material/Logout";
 import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import LocalPrintshopOutlinedIcon from "@mui/icons-material/LocalPrintshopOutlined";
 import MergeTypeIcon from "@mui/icons-material/MergeType";
@@ -84,6 +86,7 @@ import ShoppingBagOutlinedIcon from "@mui/icons-material/ShoppingBagOutlined";
 import SwapHorizIcon from "@mui/icons-material/SwapHoriz";
 import SyncIcon from "@mui/icons-material/Sync";
 import PlaceOutlinedIcon from "@mui/icons-material/PlaceOutlined";
+import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturing";
 import PushPinOutlinedIcon from "@mui/icons-material/PushPinOutlined";
 
 import { LinkedShipmentTabs, type LinkedShipmentTabItem } from "../components/LinkedShipmentTabs";
@@ -271,11 +274,14 @@ const ORDER_SEARCH_PLACEHOLDER = "Scan barcode or search by order/shipment ID";
 /** Demo search shortcuts (help menu in search bar); values match `normalizeOrderIdForLoad`. */
 const PROTOTYPE_SEARCH_KEYWORDS = [
   "pack",
+  "instruction-item-level",
+  "instruction-shipment-level",
   "pending",
   "manual",
   "fallback",
   "fallback-supervisor",
   "sort",
+  "robot",
   "hold",
   "similar",
   "split",
@@ -285,6 +291,10 @@ const PROTOTYPE_SEARCH_KEYWORDS = [
 
 /** Prototype: full ready-to-pack UI — search `pack` or Next Order. */
 const PROTOTYPE_PACK_ORDER_ID = "pack";
+/** Same ready-to-pack layout as `pack`, but only the first line item is loaded and rendered. */
+const PROTOTYPE_INSTRUCTION_ITEM_LEVEL_ORDER_ID = "instruction-item-level";
+/** Full pack list like `pack`, with shipment-wide packing instructions between Remarks and Pack (sidebar). */
+const PROTOTYPE_INSTRUCTION_SHIPMENT_LEVEL_ORDER_ID = "instruction-shipment-level";
 /** Prototype: pending queue — search `pending` (legacy alias: `fix`) or Next Order. */
 const PROTOTYPE_PENDING_ORDER_ID = "pending";
 /** Prototype: ready-to-pack + manual tracking ID row (Next Order after `pending`, or search `manual` / `manualpack`). */
@@ -305,6 +315,8 @@ const PROTOTYPE_SUPERVISOR_DISPLAY_NAME = "Elena Vasquez";
 const PROTOTYPE_SUPERVISOR_INITIALS = "EV";
 /** Prototype: sorting station — search `sort`; full screen without pack checkbox / pack buttons (API tracks sorting). */
 const PROTOTYPE_SORT_STATION_ORDER_ID = "sort";
+/** Same sorting-station UI as `sort`, but only the first line item is shown (robot pick cell). */
+const PROTOTYPE_ROBOT_STATION_ORDER_ID = "robot";
 /** Prototype: already packed shipment — search `packed` or Next Order. */
 const PROTOTYPE_PACKED_ORDER_ID = "packed";
 /** Prototype: cancelled shipment — search `cancelled` or Next Order. */
@@ -416,6 +428,10 @@ function isSortingStationOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_SORT_STATION_ORDER_ID;
 }
 
+function isRobotStationOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_ROBOT_STATION_ORDER_ID;
+}
+
 function isPrototypeCancelledOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_CANCELLED_ORDER_ID;
 }
@@ -436,10 +452,25 @@ function isPrototypePackedOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_PACKED_ORDER_ID;
 }
 
+function isPrototypeInstructionItemLevelOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_INSTRUCTION_ITEM_LEVEL_ORDER_ID;
+}
+
+function isPrototypeInstructionShipmentLevelOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_INSTRUCTION_SHIPMENT_LEVEL_ORDER_ID;
+}
+
 function getNextPrototypeCycleOrderId(current: string | null): string {
   const order = PROTOTYPE_NEXT_ORDER_CYCLE;
   if (!current) return order[0];
-  const i = order.findIndex((id) => id.toLowerCase() === current.toLowerCase());
+  const normalized =
+    current.toLowerCase() === PROTOTYPE_INSTRUCTION_ITEM_LEVEL_ORDER_ID ||
+    current.toLowerCase() === PROTOTYPE_INSTRUCTION_SHIPMENT_LEVEL_ORDER_ID
+      ? PROTOTYPE_PACK_ORDER_ID
+      : current.toLowerCase() === PROTOTYPE_ROBOT_STATION_ORDER_ID
+        ? PROTOTYPE_SORT_STATION_ORDER_ID
+        : current;
+  const i = order.findIndex((id) => id.toLowerCase() === normalized.toLowerCase());
   if (i < 0) return order[0];
   return order[(i + 1) % order.length];
 }
@@ -453,6 +484,12 @@ function normalizeOrderIdForLoad(raw: string): string {
   const t = stripLeadingHashSearchPrefix(raw);
   const lower = t.toLowerCase();
   if (lower === PROTOTYPE_PACK_ORDER_ID) return PROTOTYPE_PACK_ORDER_ID;
+  if (lower === PROTOTYPE_INSTRUCTION_ITEM_LEVEL_ORDER_ID || lower === "instruction_item_level") {
+    return PROTOTYPE_INSTRUCTION_ITEM_LEVEL_ORDER_ID;
+  }
+  if (lower === PROTOTYPE_INSTRUCTION_SHIPMENT_LEVEL_ORDER_ID || lower === "instruction_shipment_level") {
+    return PROTOTYPE_INSTRUCTION_SHIPMENT_LEVEL_ORDER_ID;
+  }
   if (lower === PROTOTYPE_PENDING_ORDER_ID || lower === "fix") return PROTOTYPE_PENDING_ORDER_ID;
   if (lower === PROTOTYPE_MANUAL_PACK_ORDER_ID || lower === "manualpack" || lower === "manual-pack")
     return PROTOTYPE_MANUAL_PACK_ORDER_ID;
@@ -463,6 +500,7 @@ function normalizeOrderIdForLoad(raw: string): string {
   )
     return PROTOTYPE_FALLBACK_ORDER_ID;
   if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
+  if (lower === PROTOTYPE_ROBOT_STATION_ORDER_ID) return PROTOTYPE_ROBOT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
   if (lower === PROTOTYPE_ON_HOLD_ORDER_ID) return PROTOTYPE_ON_HOLD_ORDER_ID;
@@ -484,9 +522,12 @@ function prototypeSplitOriginalShipmentIdForTabs(currentShipmentId: string): str
   if (
     !t ||
     t === PROTOTYPE_PACK_ORDER_ID ||
+    t === PROTOTYPE_INSTRUCTION_ITEM_LEVEL_ORDER_ID ||
+    t === PROTOTYPE_INSTRUCTION_SHIPMENT_LEVEL_ORDER_ID ||
     t === PROTOTYPE_MANUAL_PACK_ORDER_ID ||
     t === PROTOTYPE_FALLBACK_ORDER_ID ||
-    t === PROTOTYPE_SORT_STATION_ORDER_ID
+    t === PROTOTYPE_SORT_STATION_ORDER_ID ||
+    t === PROTOTYPE_ROBOT_STATION_ORDER_ID
   )
     return "SH-12345";
   if (t.startsWith("SH-")) return t;
@@ -728,6 +769,168 @@ function SectionOverline({ children }: { children: ReactNode }) {
     >
       {children}
     </Typography>
+  );
+}
+
+/** Prototype copy for the packing-instructions card (ItemBlock “Instructions” column). */
+const PROTOTYPE_PACKING_INSTRUCTIONS_MEDIUM =
+  "This is a longer description to tell the packer this is over $100 and to pack this specific item in this box.";
+const PROTOTYPE_PACKING_INSTRUCTIONS_SMALL =
+  "Pack this item in the Small box. Secure the chain in the compartment before sealing.";
+
+function ItemPackingInstructionsCard({
+  imageSrc,
+  bodyText,
+  layout = "item",
+}: {
+  imageSrc: string;
+  bodyText: string;
+  layout?: "item" | "shipment";
+}) {
+  const [imageOnly, setImageOnly] = useState(false);
+  const isShipment = layout === "shipment";
+  const title = isShipment ? "Packing Instructions" : "Instructions";
+
+  const toggleView = () => setImageOnly((v) => !v);
+
+  const imageColumn = (
+    <Box
+      sx={{
+        flexShrink: 0,
+        alignSelf: "center",
+        display: "flex",
+        width: { xs: "min(100%, 150px)", sm: 150 },
+        maxWidth: 150,
+        aspectRatio: "1",
+        bgcolor: "#eeeff1",
+        borderRadius: 0.5,
+        overflow: "hidden",
+      }}
+    >
+      <Box
+        component="img"
+        src={imageSrc}
+        alt=""
+        sx={{
+          width: "100%",
+          height: "100%",
+          objectFit: "cover",
+          display: "block",
+        }}
+      />
+    </Box>
+  );
+
+  const textStack = !imageOnly ? (
+    <Stack spacing={1} sx={{ flex: "1 1 auto", minWidth: 0, justifyContent: "center", pr: 2 }}>
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, letterSpacing: "0.15px", color: "#01579b" }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.primary" sx={{ letterSpacing: "0.15px", lineHeight: 1.5 }}>
+        {bodyText}
+      </Typography>
+    </Stack>
+  ) : null;
+
+  const itemTextStack = !imageOnly ? (
+    <Stack
+      spacing={1}
+      sx={{
+        flex: { xs: "1 1 auto", sm: "0 0 auto" },
+        width: { xs: "100%", sm: 262 },
+        minWidth: { xs: 0, sm: 262 },
+        maxWidth: { xs: "100%", sm: 262 },
+        flexShrink: 0,
+        boxSizing: "border-box",
+        p: 2,
+        justifyContent: "center",
+      }}
+    >
+      <Typography variant="subtitle2" sx={{ fontWeight: 600, letterSpacing: "0.15px", color: "#01579b" }}>
+        {title}
+      </Typography>
+      <Typography variant="body2" color="text.primary" sx={{ letterSpacing: "0.15px", lineHeight: 1.5 }}>
+        {bodyText}
+      </Typography>
+    </Stack>
+  ) : null;
+
+  const toggleShellSx = {
+    width: "100%",
+    display: "block",
+    borderRadius: isShipment ? 0 : 2,
+    overflow: "hidden",
+    textAlign: "left" as const,
+  };
+
+  if (isShipment) {
+    return (
+      <ButtonBase
+        component="div"
+        onClick={(e) => {
+          e.preventDefault();
+          toggleView();
+        }}
+        aria-label={imageOnly ? "Show packing instructions text" : "Show image only"}
+        aria-pressed={imageOnly}
+        focusRipple
+        sx={toggleShellSx}
+      >
+        <Box
+          sx={{
+            display: "flex",
+            flexDirection: { xs: "column", sm: "row" },
+            flexWrap: "nowrap",
+            alignItems: "center",
+            justifyContent: imageOnly ? "center" : undefined,
+            width: "100%",
+            minWidth: 0,
+            boxSizing: "border-box",
+            gap: 0,
+            pl: 3,
+          }}
+        >
+          {textStack}
+          {imageColumn}
+        </Box>
+      </ButtonBase>
+    );
+  }
+
+  return (
+    <ButtonBase
+      component="div"
+      onClick={(e) => {
+        e.preventDefault();
+        toggleView();
+      }}
+      aria-label={imageOnly ? "Show packing instructions text" : "Show image only"}
+      aria-pressed={imageOnly}
+      focusRipple
+      sx={toggleShellSx}
+    >
+      <Paper
+        variant="outlined"
+        elevation={0}
+        sx={{
+          display: "flex",
+          flexDirection: { xs: "column", sm: "row" },
+          flexWrap: "nowrap",
+          alignItems: "center",
+          justifyContent: imageOnly ? "center" : undefined,
+          borderRadius: 2,
+          overflow: "hidden",
+          borderColor: "divider",
+          width: "100%",
+          maxWidth: "100%",
+          minWidth: 0,
+          boxSizing: "border-box",
+        }}
+      >
+        {itemTextStack}
+        {imageColumn}
+      </Paper>
+    </ButtonBase>
   );
 }
 
@@ -979,6 +1182,17 @@ function formatCarrierRouteDisplay(route: ShippingRouteRow) {
   return `${route.carrier} ${route.method}`;
 }
 
+/** Shipment details “Carrier Route” field only: light pill behind logo + service name */
+const carrierRouteServiceBadgeBoxSx = {
+  bgcolor: "rgba(219, 240, 255, 1)",
+  py: 0.5,
+  px: 1,
+  borderRadius: "4px",
+  boxSizing: "border-box" as const,
+  width: "100%",
+  minWidth: 0,
+};
+
 function findShippingRoute(id: string): ShippingRouteRow | undefined {
   return SHIPPING_ROUTE_ROWS.find((r) => r.id === id);
 }
@@ -991,28 +1205,24 @@ function ShippingRouteColumnLabels({ route }: { route: ShippingRouteRow }) {
         <Typography variant="caption" color="text.secondary" display="block" sx={{ textTransform: "capitalize" }}>
           Carrier
         </Typography>
-        <Stack direction="row" alignItems="center" spacing={1} sx={{ minHeight: 28 }}>
+        <Stack
+          direction="row"
+          alignItems="center"
+          spacing={0}
+          sx={{ alignSelf: "flex-start", pt: 0.25, gap: "8px", minWidth: 0 }}
+        >
           {logoSrc ? (
             <Box
               component="img"
               src={logoSrc}
-              alt={route.carrier}
-              sx={{ height: 28, width: "auto", maxWidth: 88, objectFit: "contain", display: "block" }}
+              alt={formatCarrierRouteDisplay(route)}
+              sx={{ height: 16, width: "auto", maxWidth: 88, objectFit: "contain", display: "block", flexShrink: 0 }}
             />
-          ) : (
-            <Typography variant="body1" color="text.primary" letterSpacing="0.15px">
-              {route.carrier}
-            </Typography>
-          )}
+          ) : null}
+          <Typography variant="body1" color="text.primary" letterSpacing="0.15px" sx={{ minWidth: 0 }}>
+            {formatCarrierRouteDisplay(route)}
+          </Typography>
         </Stack>
-      </Box>
-      <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
-        <Typography variant="caption" color="text.secondary" display="block" sx={{ textTransform: "capitalize" }}>
-          Method
-        </Typography>
-        <Typography variant="body1" color="text.primary" letterSpacing="0.15px">
-          {route.method}
-        </Typography>
       </Box>
       <Box sx={{ flex: "1 1 0%", minWidth: 0 }}>
         <Typography variant="caption" color="text.secondary" display="block">
@@ -3474,6 +3684,7 @@ export default function ReadyToPack() {
   const [prototypeFactorySiteView, setPrototypeFactorySiteView] = useState<"kiryatGat" | "hungary">("kiryatGat");
   /** Prototype: packer vs supervisor (supervisor unlocks Fallback Pack on fallback retry UI). */
   const [prototypeAccountRole, setPrototypeAccountRole] = useState<"packer" | "supervisor">("packer");
+  const [userProfileMenuAnchor, setUserProfileMenuAnchor] = useState<HTMLElement | null>(null);
   /** Figma 2345:27263 — per line item, container location after simulated scan. */
   const [containerAssignByItemId, setContainerAssignByItemId] = useState<
     Record<string, PrototypeContainerAssignDetail>
@@ -3481,10 +3692,16 @@ export default function ReadyToPack() {
 
   const orderPacked = packingOrderUiStatus === "packed";
   const isPackActionsBlocked = isPackingStatusBlockingActions(packingOrderUiStatus);
-  const isSortingStationView = isSortingStationOrderId(loadedOrderId);
+  const isSortingStationView =
+    isSortingStationOrderId(loadedOrderId) || isRobotStationOrderId(loadedOrderId);
+  /** Robot prototype only: container row shows “Robot” / “Cell 27” instead of sort-station copy. */
+  const robotCellAssignUi = isRobotStationOrderId(loadedOrderId);
   const isSimilarOrdersView = isPrototypeSimilarOrdersId(loadedOrderId);
   const isSplitOrdersView = isPrototypeSplitOrdersId(loadedOrderId);
   const isFallbackPrototype = isPrototypeFallbackOrderId(loadedOrderId);
+  const showShipmentLevelInstructionsPanel = isPrototypeInstructionShipmentLevelOrderId(loadedOrderId);
+  const hideInlineItemPackingInstructions = showShipmentLevelInstructionsPanel;
+  const sidebarSingleColumnMd = showShipmentLevelInstructionsPanel;
   const showFallbackPackButton =
     isFallbackPrototype &&
     packingOrderUiStatus === "packApiFailed" &&
@@ -3546,7 +3763,9 @@ export default function ReadyToPack() {
       ? activeSimilarOrder.orderNumber
       : isSplitOrdersView && loadedOrderId && activeSplitOrder
         ? activeSplitOrder.orderNumber
-        : isPrototypeManualPackOrderId(loadedOrderId)
+        : isPrototypeManualPackOrderId(loadedOrderId) ||
+            isPrototypeInstructionItemLevelOrderId(loadedOrderId) ||
+            isPrototypeInstructionShipmentLevelOrderId(loadedOrderId)
           ? "5847219"
           : isPrototypeFallbackOrderId(loadedOrderId)
             ? "30238941234"
@@ -3556,7 +3775,10 @@ export default function ReadyToPack() {
       ? activeSimilarOrder.shipmentId
       : isSplitOrdersView && loadedOrderId && activeSplitOrder
         ? activeSplitOrder.shipmentId
-        : isPrototypeManualPackOrderId(loadedOrderId) || isPrototypeFallbackOrderId(loadedOrderId)
+        : isPrototypeManualPackOrderId(loadedOrderId) ||
+            isPrototypeFallbackOrderId(loadedOrderId) ||
+            isPrototypeInstructionItemLevelOrderId(loadedOrderId) ||
+            isPrototypeInstructionShipmentLevelOrderId(loadedOrderId)
           ? "SH-12345"
           : loadedOrderId ?? "";
 
@@ -3662,6 +3884,16 @@ export default function ReadyToPack() {
   const readyToPackStatusChip = getPackingStatusChipConfig("readyToPack", theme);
   const ReadyToPackStatusIcon = readyToPackStatusChip.Icon;
   const onHoldStatusMenuOpen = Boolean(onHoldStatusMenuAnchor);
+  const userProfileMenuOpen = Boolean(userProfileMenuAnchor);
+
+  const headerProfileDisplayName =
+    prototypeAccountRole === "supervisor"
+      ? PROTOTYPE_SUPERVISOR_DISPLAY_NAME
+      : prototypeFactorySiteView === "hungary"
+        ? "James"
+        : "John";
+  const headerProfileLocationLabel =
+    prototypeFactorySiteView === "hungary" ? "Hungary" : "Kiryat Gat";
 
   const moreActionsMenuItems = orderPacked ? MORE_ACTIONS_MENU_ITEMS_PACKED : MORE_ACTIONS_MENU_ITEMS_DEFAULT;
 
@@ -3786,7 +4018,12 @@ export default function ReadyToPack() {
       if (skipPackItemsResetAfterSplitConfirmRef.current) {
         skipPackItemsResetAfterSplitConfirmRef.current = false;
       } else {
-        setPackItems(base);
+        const firstLineId = PACK_LINE_ITEM_META[0].id;
+        setPackItems(
+          isPrototypeInstructionItemLevelOrderId(loadedOrderId) || isRobotStationOrderId(loadedOrderId)
+            ? base.filter((i) => i.id === firstLineId)
+            : base,
+        );
       }
     }
     if (isOnHoldProto) {
@@ -4179,23 +4416,38 @@ export default function ReadyToPack() {
               </IconButton>
             </Tooltip>
             <Divider orientation="vertical" flexItem sx={{ height: 40, borderColor: "divider" }} />
-            <Stack direction="row" alignItems="flex-start" spacing={1} sx={{ color: "inherit" }}>
+            <Stack direction="row" alignItems="center" spacing={1.25} sx={{ color: "inherit" }}>
+              <Stack sx={{ minWidth: 0, alignItems: "flex-end" }}>
+                <Typography variant="body2" fontWeight={500} sx={{ textAlign: "right", lineHeight: 1.35 }}>
+                  {headerProfileDisplayName}
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ textAlign: "right", display: "block", lineHeight: 1.35 }}
+                >
+                  {headerProfileLocationLabel}
+                </Typography>
+              </Stack>
               <ButtonBase
-                onClick={() =>
-                  setPrototypeAccountRole((r) => (r === "packer" ? "supervisor" : "packer"))
-                }
-                sx={{ borderRadius: 1, alignSelf: "flex-start", px: 0.5, py: 0.25, mt: 0.125 }}
-                aria-label={
-                  prototypeAccountRole === "packer"
-                    ? "Switch to supervisor account"
-                    : "Switch to packer account"
-                }
+                id="header-user-profile-trigger"
+                aria-controls={userProfileMenuOpen ? "header-user-profile-menu" : undefined}
+                aria-haspopup="true"
+                aria-expanded={userProfileMenuOpen ? "true" : undefined}
+                aria-label="Open account menu"
+                onClick={(e) => setUserProfileMenuAnchor(e.currentTarget)}
+                sx={{
+                  position: "relative",
+                  flexShrink: 0,
+                  borderRadius: "50%",
+                  p: 0,
+                }}
               >
                 <Avatar
                   sx={{
-                    width: 32,
-                    height: 32,
-                    fontSize: 12,
+                    width: 36,
+                    height: 36,
+                    fontSize: 13,
                     bgcolor:
                       prototypeAccountRole === "supervisor"
                         ? PROTOTYPE_SUPERVISOR_AVATAR_BG
@@ -4206,56 +4458,82 @@ export default function ReadyToPack() {
                     ? PROTOTYPE_SUPERVISOR_INITIALS
                     : "JD"}
                 </Avatar>
+                <Box
+                  aria-hidden
+                  sx={{
+                    position: "absolute",
+                    right: -4,
+                    bottom: -4,
+                    width: 16,
+                    height: 16,
+                    borderRadius: "50%",
+                    bgcolor: "background.paper",
+                    border: "1px solid",
+                    borderColor: "divider",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: 1,
+                    pointerEvents: "none",
+                  }}
+                >
+                  <KeyboardArrowDownIcon
+                    sx={{
+                      fontSize: 12,
+                      color: "text.secondary",
+                      transition: (muiTheme) => muiTheme.transitions.create("transform"),
+                      transform: userProfileMenuOpen ? "rotate(180deg)" : "none",
+                    }}
+                  />
+                </Box>
               </ButtonBase>
-              <Stack sx={{ minWidth: 0 }}>
-                <ButtonBase
-                  onClick={() =>
-                    setPrototypeAccountRole((r) => (r === "packer" ? "supervisor" : "packer"))
-                  }
-                  sx={{
-                    borderRadius: 1,
-                    px: 0.5,
-                    py: 0.125,
-                    display: "block",
-                    textAlign: "left",
-                    width: "100%",
-                    color: "inherit",
+              <Menu
+                id="header-user-profile-menu"
+                anchorEl={userProfileMenuAnchor}
+                open={userProfileMenuOpen}
+                onClose={() => setUserProfileMenuAnchor(null)}
+                anchorOrigin={{ vertical: "bottom", horizontal: "right" }}
+                transformOrigin={{ vertical: "top", horizontal: "right" }}
+                slotProps={{ paper: { sx: { minWidth: 200, borderRadius: 1.5, mt: 0.5 } } }}
+              >
+                <MenuItem
+                  dense
+                  onClick={() => {
+                    setUserProfileMenuAnchor(null);
+                    setPrototypeAccountRole((r) => (r === "packer" ? "supervisor" : "packer"));
                   }}
-                  aria-label={
-                    prototypeAccountRole === "packer"
-                      ? "Switch to supervisor account"
-                      : "Switch to packer account"
-                  }
                 >
-                  <Typography variant="body2" fontWeight={500} textAlign="left">
-                    {prototypeAccountRole === "supervisor"
-                      ? PROTOTYPE_SUPERVISOR_DISPLAY_NAME
-                      : prototypeFactorySiteView === "hungary"
-                        ? "James"
-                        : "John"}
-                  </Typography>
-                </ButtonBase>
-                <ButtonBase
-                  onClick={handleTogglePrototypeFactorySite}
-                  sx={{
-                    borderRadius: 1,
-                    px: 0.5,
-                    py: 0.125,
-                    display: "block",
-                    textAlign: "left",
-                    width: "100%",
+                  {prototypeAccountRole === "packer"
+                    ? "Switch to supervisor (demo)"
+                    : "Switch to packer (demo)"}
+                </MenuItem>
+                <MenuItem
+                  dense
+                  onClick={() => {
+                    setUserProfileMenuAnchor(null);
+                    handleTogglePrototypeFactorySite();
                   }}
-                  aria-label={
-                    prototypeFactorySiteView === "hungary"
-                      ? "Switch to Kiryat Gat factory view"
-                      : "Switch to Hungary factory view"
-                  }
                 >
-                  <Typography variant="caption" color="text.secondary" textAlign="left" display="block">
-                    {prototypeFactorySiteView === "hungary" ? "Hungary" : "Kiryat Gat"}
-                  </Typography>
-                </ButtonBase>
-              </Stack>
+                  {prototypeFactorySiteView === "hungary"
+                    ? "Switch to Kiryat Gat (demo)"
+                    : "Switch to Hungary (demo)"}
+                </MenuItem>
+                <Divider />
+                <MenuItem
+                  dense
+                  onClick={() => {
+                    setUserProfileMenuAnchor(null);
+                    setLoadedOrderId(null);
+                    setOrderInput("");
+                  }}
+                  sx={{ color: "error.main" }}
+                >
+                  <ListItemIcon sx={{ color: "inherit", minWidth: 36 }}>
+                    <LogoutIcon fontSize="small" />
+                  </ListItemIcon>
+                  Log out
+                </MenuItem>
+              </Menu>
             </Stack>
           </Stack>
         </Toolbar>
@@ -4521,14 +4799,31 @@ export default function ReadyToPack() {
                     spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
                     sx={{ width: "100%", minWidth: 0 }}
                   >
-                    <Stack direction="row" spacing={1} alignItems="center" sx={{ minHeight: 28 }}>
+                    <Stack
+                      direction="row"
+                      alignItems="center"
+                      spacing={0}
+                      sx={{ gap: "8px", ...carrierRouteServiceBadgeBoxSx }}
+                    >
                       {activeCarrierLogoSrc ? (
-                        <Box
-                          component="img"
-                          src={activeCarrierLogoSrc}
-                          alt={activeRoute.carrier}
-                          sx={{ height: 28, width: "auto", maxWidth: 96, objectFit: "contain", display: "block" }}
-                        />
+                        <>
+                          <Box
+                            component="img"
+                            src={activeCarrierLogoSrc}
+                            alt={formatCarrierRouteDisplay(activeRoute)}
+                            sx={{
+                              height: 16,
+                              width: "auto",
+                              maxWidth: 88,
+                              objectFit: "contain",
+                              display: "block",
+                              flexShrink: 0,
+                            }}
+                          />
+                          <Typography variant="body1" color="text.primary" letterSpacing="0.15px" sx={{ minWidth: 0 }}>
+                            {formatCarrierRouteDisplay(activeRoute)}
+                          </Typography>
+                        </>
                       ) : (
                         <DetailValue>{formatCarrierRouteDisplay(activeRoute)}</DetailValue>
                       )}
@@ -4615,9 +4910,9 @@ export default function ReadyToPack() {
                       color: pink.A700,
                       px: 1.25,
                       py: 0.5,
-                      borderRadius: 1,
+                      borderRadius: "50px",
                       typography: "body1",
-                      fontWeight: 500,
+                      fontWeight: 400,
                       letterSpacing: "0.15px",
                     }}
                   >
@@ -4720,6 +5015,7 @@ export default function ReadyToPack() {
             {showPackLine0Ui ? (
               <ItemBlock
                 showHoldAssignDefault={showItemContainerAssignRow}
+                robotCellAssignUi={robotCellAssignUi}
                 containerAssignByItemId={containerAssignByItemId}
                 onContainerAssignSimulate={handleContainerAssignSimulate}
                 onContainerAssignClear={handleContainerAssignClear}
@@ -4742,23 +5038,12 @@ export default function ReadyToPack() {
                   </>
                 }
                 packaging={
-                  <>
-                    <SectionOverline>packaging type</SectionOverline>
-                    <Stack direction="row" spacing={3}>
-                      <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                        Box:
-                      </Typography>
-                      <Typography variant="body1" fontWeight={500}>
-                        Medium
-                      </Typography>
-                    </Stack>
-                    <Box
-                      component="img"
-                      src={IMG.boxMedium}
-                      alt=""
-                      sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
+                  hideInlineItemPackingInstructions ? null : (
+                    <ItemPackingInstructionsCard
+                      imageSrc={IMG.boxMedium}
+                      bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_MEDIUM}
                     />
-                  </>
+                  )
                 }
               />
             ) : null}
@@ -4768,6 +5053,7 @@ export default function ReadyToPack() {
                 {showPackLine0Ui ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
                   showHoldAssignDefault={showItemContainerAssignRow}
+                  robotCellAssignUi={robotCellAssignUi}
                   containerAssignByItemId={containerAssignByItemId}
                   onContainerAssignSimulate={handleContainerAssignSimulate}
                   onContainerAssignClear={handleContainerAssignClear}
@@ -4789,38 +5075,12 @@ export default function ReadyToPack() {
                     </>
                   }
                   packaging={
-                    <>
-                      <SectionOverline>packaging type</SectionOverline>
-                      <Stack direction="row" spacing={1.5}>
-                        <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                          Box:
-                        </Typography>
-                        <Typography variant="body1" fontWeight={500}>
-                          Small
-                        </Typography>
-                      </Stack>
-                      <Box
-                        sx={{
-                          width: 140,
-                          height: 140,
-                          borderRadius: 0.5,
-                          overflow: "hidden",
-                          position: "relative",
-                          bgcolor: "#eeeff1",
-                        }}
-                      >
-                        <Box
-                          component="img"
-                          src={IMG.boxSmall}
-                          alt=""
-                          sx={{
-                            width: "100%",
-                            height: "100%",
-                            objectFit: "cover",
-                          }}
-                        />
-                      </Box>
-                    </>
+                    hideInlineItemPackingInstructions ? null : (
+                      <ItemPackingInstructionsCard
+                        imageSrc={IMG.boxSmall}
+                        bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_SMALL}
+                      />
+                    )
                   }
                 />
               </Fragment>
@@ -4831,6 +5091,7 @@ export default function ReadyToPack() {
                 {(showPackLine0Ui || showPackLine1Ui) ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
                   showHoldAssignDefault={showItemContainerAssignRow}
+                  robotCellAssignUi={robotCellAssignUi}
                   containerAssignByItemId={containerAssignByItemId}
                   onContainerAssignSimulate={handleContainerAssignSimulate}
                   onContainerAssignClear={handleContainerAssignClear}
@@ -4870,6 +5131,7 @@ export default function ReadyToPack() {
                 {(anyPrimaryPackLineVisibleUi || extraIdx > 0) ? <Divider sx={{ my: 3 }} /> : null}
                 <ItemBlock
                   showHoldAssignDefault={showItemContainerAssignRow}
+                  robotCellAssignUi={robotCellAssignUi}
                   containerAssignByItemId={containerAssignByItemId}
                   onContainerAssignSimulate={handleContainerAssignSimulate}
                   onContainerAssignClear={handleContainerAssignClear}
@@ -4910,6 +5172,7 @@ export default function ReadyToPack() {
                     {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
                     <ItemBlock
                       showHoldAssignDefault={showItemContainerAssignRow}
+                      robotCellAssignUi={robotCellAssignUi}
                       remoteFacilityTitleRow={remoteReceivedItemCheckbox != null}
                       containerAssignByItemId={containerAssignByItemId}
                       onContainerAssignSimulate={handleContainerAssignSimulate}
@@ -4933,23 +5196,12 @@ export default function ReadyToPack() {
                         </>
                       }
                       packaging={
-                        <>
-                          <SectionOverline>packaging type</SectionOverline>
-                          <Stack direction="row" spacing={3}>
-                            <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                              Box:
-                            </Typography>
-                            <Typography variant="body1" fontWeight={500}>
-                              Medium
-                            </Typography>
-                          </Stack>
-                          <Box
-                            component="img"
-                            src={IMG.boxMedium}
-                            alt=""
-                            sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
+                        hideInlineItemPackingInstructions ? null : (
+                          <ItemPackingInstructionsCard
+                            imageSrc={IMG.boxMedium}
+                            bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_MEDIUM}
                           />
-                        </>
+                        )
                       }
                     />
                   </Box>
@@ -4961,6 +5213,7 @@ export default function ReadyToPack() {
                     {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
                     <ItemBlock
                       showHoldAssignDefault={showItemContainerAssignRow}
+                      robotCellAssignUi={robotCellAssignUi}
                       containerAssignByItemId={containerAssignByItemId}
                       onContainerAssignSimulate={handleContainerAssignSimulate}
                       onContainerAssignClear={handleContainerAssignClear}
@@ -4982,38 +5235,12 @@ export default function ReadyToPack() {
                         </>
                       }
                       packaging={
-                        <>
-                          <SectionOverline>packaging type</SectionOverline>
-                          <Stack direction="row" spacing={1.5}>
-                            <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                              Box:
-                            </Typography>
-                            <Typography variant="body1" fontWeight={500}>
-                              Small
-                            </Typography>
-                          </Stack>
-                          <Box
-                            sx={{
-                              width: 140,
-                              height: 140,
-                              borderRadius: 0.5,
-                              overflow: "hidden",
-                              position: "relative",
-                              bgcolor: "#eeeff1",
-                            }}
-                          >
-                            <Box
-                              component="img"
-                              src={IMG.boxSmall}
-                              alt=""
-                              sx={{
-                                width: "100%",
-                                height: "100%",
-                                objectFit: "cover",
-                              }}
-                            />
-                          </Box>
-                        </>
+                        hideInlineItemPackingInstructions ? null : (
+                          <ItemPackingInstructionsCard
+                            imageSrc={IMG.boxSmall}
+                            bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_SMALL}
+                          />
+                        )
                       }
                     />
                   </Box>
@@ -5025,6 +5252,7 @@ export default function ReadyToPack() {
                     {showRemoteLeadDivider ? <Divider sx={{ my: 3 }} /> : null}
                     <ItemBlock
                       showHoldAssignDefault={showItemContainerAssignRow}
+                      robotCellAssignUi={robotCellAssignUi}
                       containerAssignByItemId={containerAssignByItemId}
                       onContainerAssignSimulate={handleContainerAssignSimulate}
                       onContainerAssignClear={handleContainerAssignClear}
@@ -5177,6 +5405,7 @@ export default function ReadyToPack() {
                           {remoteLineId === PACK_LINE_ITEM_META[0].id ? (
                             <ItemBlock
                               showHoldAssignDefault={false}
+                              robotCellAssignUi={robotCellAssignUi}
                               remoteFacilityTitleRow
                               containerAssignByItemId={containerAssignByItemId}
                               onContainerAssignSimulate={handleContainerAssignSimulate}
@@ -5202,29 +5431,19 @@ export default function ReadyToPack() {
                                 </>
                               }
                               packaging={
-                                <>
-                                  <SectionOverline>packaging type</SectionOverline>
-                                  <Stack direction="row" spacing={3}>
-                                    <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                                      Box:
-                                    </Typography>
-                                    <Typography variant="body1" fontWeight={500}>
-                                      Medium
-                                    </Typography>
-                                  </Stack>
-                                  <Box
-                                    component="img"
-                                    src={IMG.boxMedium}
-                                    alt=""
-                                    sx={{ width: 140, height: 140, borderRadius: 0.5, objectFit: "cover" }}
+                                hideInlineItemPackingInstructions ? null : (
+                                  <ItemPackingInstructionsCard
+                                    imageSrc={IMG.boxMedium}
+                                    bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_MEDIUM}
                                   />
-                                </>
+                                )
                               }
                             />
                           ) : null}
                           {remoteLineId === PACK_LINE_ITEM_META[1].id ? (
                             <ItemBlock
                               showHoldAssignDefault={false}
+                              robotCellAssignUi={robotCellAssignUi}
                               containerAssignByItemId={containerAssignByItemId}
                               onContainerAssignSimulate={handleContainerAssignSimulate}
                               onContainerAssignClear={handleContainerAssignClear}
@@ -5249,44 +5468,19 @@ export default function ReadyToPack() {
                                 </>
                               }
                               packaging={
-                                <>
-                                  <SectionOverline>packaging type</SectionOverline>
-                                  <Stack direction="row" spacing={1.5}>
-                                    <Typography variant="body1" color="text.secondary" sx={{ width: 41 }}>
-                                      Box:
-                                    </Typography>
-                                    <Typography variant="body1" fontWeight={500}>
-                                      Small
-                                    </Typography>
-                                  </Stack>
-                                  <Box
-                                    sx={{
-                                      width: 140,
-                                      height: 140,
-                                      borderRadius: 0.5,
-                                      overflow: "hidden",
-                                      position: "relative",
-                                      bgcolor: "#eeeff1",
-                                    }}
-                                  >
-                                    <Box
-                                      component="img"
-                                      src={IMG.boxSmall}
-                                      alt=""
-                                      sx={{
-                                        width: "100%",
-                                        height: "100%",
-                                        objectFit: "cover",
-                                      }}
-                                    />
-                                  </Box>
-                                </>
+                                hideInlineItemPackingInstructions ? null : (
+                                  <ItemPackingInstructionsCard
+                                    imageSrc={IMG.boxSmall}
+                                    bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_SMALL}
+                                  />
+                                )
                               }
                             />
                           ) : null}
                           {remoteLineId === PACK_LINE_ITEM_META[2].id ? (
                             <ItemBlock
                               showHoldAssignDefault={false}
+                              robotCellAssignUi={robotCellAssignUi}
                               remoteFacilityTitleRow
                               containerAssignByItemId={containerAssignByItemId}
                               onContainerAssignSimulate={handleContainerAssignSimulate}
@@ -5346,20 +5540,37 @@ export default function ReadyToPack() {
               alignSelf: { lg: "flex-start" },
               gridTemplateColumns: {
                 xs: "minmax(0, 1fr)",
-                md: "minmax(0, 1fr) minmax(0, 1fr)",
+                md: sidebarSingleColumnMd ? "minmax(0, 1fr)" : "minmax(0, 1fr) minmax(0, 1fr)",
                 lg: "minmax(0, 1fr)",
               },
-              gridTemplateAreas: hidePackActionsUi
-                ? {
+              gridTemplateAreas: (() => {
+                if (hidePackActionsUi) {
+                  if (showShipmentLevelInstructionsPanel) {
+                    return {
+                      xs: '"status" "remarks" "shipmentInstr"',
+                      md: '"status" "remarks" "shipmentInstr"',
+                      lg: '"status" "remarks" "shipmentInstr"',
+                    };
+                  }
+                  return {
                     xs: '"status" "remarks"',
                     md: '"remarks status" "remarks ."',
                     lg: '"status" "remarks"',
-                  }
-                : {
-                    xs: '"status" "remarks" "pack"',
-                    md: '"remarks status" "remarks pack"',
-                    lg: '"status" "remarks" "pack"',
-                  },
+                  };
+                }
+                if (showShipmentLevelInstructionsPanel) {
+                  return {
+                    xs: '"status" "remarks" "shipmentInstr" "pack"',
+                    md: '"status" "remarks" "shipmentInstr" "pack"',
+                    lg: '"status" "remarks" "shipmentInstr" "pack"',
+                  };
+                }
+                return {
+                  xs: '"status" "remarks" "pack"',
+                  md: '"remarks status" "remarks pack"',
+                  lg: '"status" "remarks" "pack"',
+                };
+              })(),
             }}
           >
             <Paper
@@ -5810,6 +6021,30 @@ export default function ReadyToPack() {
               </Box>
             </Paper>
 
+            {showShipmentLevelInstructionsPanel && (
+              <Paper
+                elevation={1}
+                sx={{
+                  gridArea: "shipmentInstr",
+                  px: 0,
+                  py: 0,
+                  borderRadius: 1,
+                  ...elevationSx,
+                  minWidth: 0,
+                  width: "100%",
+                  boxSizing: "border-box",
+                  alignSelf: "start",
+                  overflow: "hidden",
+                }}
+              >
+                <ItemPackingInstructionsCard
+                  layout="shipment"
+                  imageSrc={IMG.boxMedium}
+                  bodyText={PROTOTYPE_PACKING_INSTRUCTIONS_MEDIUM}
+                />
+              </Paper>
+            )}
+
             {!hidePackActionsUi && (
               <Paper
                 elevation={1}
@@ -6164,17 +6399,57 @@ export default function ReadyToPack() {
   );
 }
 
+/** Prototype robot sort row: static cell label (no container / scan copy). */
+const PROTOTYPE_ROBOT_CELL_DISPLAY_TEXT = "Cell 27";
+
 /** Figma 1664:18638 default + 2345:27263 assigned (Location3): scan / container + location + clear. */
 function ItemHoldAssignContainer({
   assigned,
   onSimulateScan,
   onClear,
+  robotStaticCellUi = false,
 }: {
   assigned: PrototypeContainerAssignDetail | null;
   onSimulateScan: () => void;
   onClear: () => void;
+  /** Robot prototype + sort assign row only: “Robot” / “Cell 27” (no container / scan copy). */
+  robotStaticCellUi?: boolean;
 }) {
-  const labelColumn = (
+  const leftLabel = robotStaticCellUi ? "Robot" : "Container";
+
+  const labelColumn = robotStaticCellUi ? (
+    <Box
+      sx={{
+        bgcolor: "grey.200",
+        pl: 2,
+        pr: 2,
+        py: 0.5,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+        alignSelf: "stretch",
+        boxSizing: "border-box",
+      }}
+    >
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0 }}>
+        <PrecisionManufacturingIcon sx={{ fontSize: 20, color: "grey.700", flexShrink: 0 }} aria-hidden />
+        <Typography
+          component="span"
+          sx={{
+            fontWeight: 500,
+            fontSize: 14,
+            lineHeight: 1.5,
+            letterSpacing: "0.15px",
+            color: "grey.900",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {leftLabel}
+        </Typography>
+      </Stack>
+    </Box>
+  ) : (
     <Box
       sx={{
         bgcolor: "grey.200",
@@ -6197,10 +6472,61 @@ function ItemHoldAssignContainer({
           whiteSpace: "nowrap",
         }}
       >
-        Container
+        {leftLabel}
       </Typography>
     </Box>
   );
+
+  /** Robot sort row: purely decorative label; no scan simulate or clear (Figma static). */
+  if (robotStaticCellUi) {
+    return (
+      <Box
+        sx={{
+          display: "flex",
+          flexDirection: "row",
+          alignItems: "stretch",
+          width: "fit-content",
+          maxWidth: "100%",
+          minHeight: 40,
+          borderRadius: "4px",
+          border: "1px solid",
+          borderColor: "divider",
+          bgcolor: "background.default",
+          overflow: "hidden",
+          textAlign: "left",
+        }}
+      >
+        {labelColumn}
+        <Box
+          sx={{
+            flex: "0 0 auto",
+            px: 2,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "center",
+            alignSelf: "stretch",
+            boxSizing: "border-box",
+          }}
+        >
+          <Typography
+            component="span"
+            sx={{
+              fontSize: 14,
+              lineHeight: "24px",
+              letterSpacing: "0.15px",
+              color: "text.primary",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              py: 0.75,
+              boxSizing: "border-box",
+            }}
+          >
+            {PROTOTYPE_ROBOT_CELL_DISPLAY_TEXT}
+          </Typography>
+        </Box>
+      </Box>
+    );
+  }
 
   if (assigned != null) {
     return (
@@ -6396,6 +6722,7 @@ function ItemBlock({
   titleRowEnd,
   showHoldAssignDefault = false,
   remoteFacilityTitleRow = false,
+  robotCellAssignUi = false,
   containerAssignByItemId = {},
   onContainerAssignSimulate = () => {},
   onContainerAssignClear = () => {},
@@ -6415,6 +6742,8 @@ function ItemBlock({
   showHoldAssignDefault?: boolean;
   /** Other-facilities row: no container assign; remarks after title; `titleRowEnd` (e.g. Item Received) aligned to the row end. */
   remoteFacilityTitleRow?: boolean;
+  /** Robot prototype (`robot` search): sort assign row uses “Robot” / “Cell 27” copy only. */
+  robotCellAssignUi?: boolean;
   /** Prototype scan → container row (Figma 2345:27263), keyed by `itemId`. */
   containerAssignByItemId?: Record<string, PrototypeContainerAssignDetail>;
   onContainerAssignSimulate?: (itemId: string) => void;
@@ -6574,6 +6903,7 @@ function ItemBlock({
                 assigned={containerAssignByItemId[itemId] ?? null}
                 onSimulateScan={() => onContainerAssignSimulate(itemId)}
                 onClear={() => onContainerAssignClear(itemId)}
+                robotStaticCellUi={robotCellAssignUi}
               />
             ) : null}
           </Box>
@@ -6637,13 +6967,12 @@ function ItemBlock({
           <Stack
             spacing={0.5}
             sx={{
-              flex: packaging ? { md: "2 1 0%" } : "1 1 auto",
+              flex: packaging ? { md: "1 1 0%" } : "1 1 auto",
               minWidth: 0,
               width: { xs: "100%", md: "auto" },
               boxSizing: "border-box",
               pr: { md: packaging ? 3 : 0 },
-              borderRight: { md: packaging ? "1px solid" : "none" },
-              borderColor: { md: "divider" },
+              borderColor: "divider",
               pb: packaging ? { xs: 2, md: 0 } : 0,
               borderBottom: packaging ? { xs: "1px solid", md: "none" } : "none",
             }}
@@ -6654,9 +6983,9 @@ function ItemBlock({
             <Stack
               spacing={0.5}
               sx={{
-                flex: { md: "1 1 0%" },
-                minWidth: { md: 160 },
-                maxWidth: { md: 280 },
+                flex: { md: "0 0 auto" },
+                minWidth: { md: 428 },
+                maxWidth: { md: 460 },
                 width: { xs: "100%", md: "auto" },
                 boxSizing: "border-box",
                 pl: { md: 3 },
