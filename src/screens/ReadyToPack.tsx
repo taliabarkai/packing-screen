@@ -1509,14 +1509,15 @@ function UpdateAddressDialog({
   );
 }
 
-type OrderHistoryEntry = {
+type HistoryLogEntry = {
   id: string;
   at: string;
   source: string;
-  detail: string;
+  /** Omitted for compact shipment timeline rows (title + date only). */
+  detail?: string;
 };
 
-const ORDER_HISTORY_LOG: OrderHistoryEntry[] = [
+const ORDER_HISTORY_LOG: HistoryLogEntry[] = [
   {
     id: "1",
     source: "PERIODIC SYSTEM",
@@ -1553,14 +1554,130 @@ const ORDER_HISTORY_LOG: OrderHistoryEntry[] = [
   },
 ];
 
-function OrderHistoryLogDialog({
+/**
+ * Shipment timeline (newest first). `source` = parenthetical actor (order-history caption style);
+ * `detail` = narrative after the close-paren in the spec.
+ */
+const SHIPMENT_HISTORY_LOG: HistoryLogEntry[] = [
+  {
+    id: "sh-17",
+    source: "Shipment system",
+    at: "5/4/2026 3:42 PM",
+    detail: "Status moved to packed.",
+  },
+  {
+    id: "sh-16",
+    source: "Fedex",
+    at: "5/4/2026 3:30 PM",
+    detail: "tracking ID provided 41236471846.",
+  },
+  {
+    id: "sh-15",
+    source: "Shipment system",
+    at: "5/4/2026 3:18 PM",
+    detail: "API initiated.",
+  },
+  {
+    id: "sh-14",
+    source: "David packer",
+    at: "5/4/2026 3:05 PM",
+    detail: "Address changed.",
+  },
+  {
+    id: "sh-13",
+    source: "Fedex API",
+    at: "5/4/2026 2:52 PM",
+    detail: "API failed due to wrong ZIP.",
+  },
+  {
+    id: "sh-12",
+    source: "Shipment system",
+    at: "5/4/2026 2:35 PM",
+    detail: "API initiated.",
+  },
+  {
+    id: "sh-11",
+    source: "Shipment system",
+    at: "5/4/2026 2:10 PM",
+    detail: "Status moved to ready to pack.",
+  },
+  {
+    id: "sh-10",
+    source: "Item tracker, Noga packing sorter",
+    at: "5/4/2026 1:48 PM",
+    detail: "On hold released.",
+  },
+  {
+    id: "sh-9",
+    source: "Shipment service",
+    at: "5/4/2026 1:25 PM",
+    detail: "Pending item moved to sent.",
+  },
+  {
+    id: "sh-8",
+    source: "Item tracker",
+    at: "5/4/2026 1:02 PM",
+    detail: "Item stored in on hold container 321 Location Packing sorter shelf.",
+  },
+  {
+    id: "sh-7",
+    source: "CSR",
+    at: "5/4/2026 12:40 PM",
+    detail: 'Remark received "Customer added new item" from Bruno CSR.',
+  },
+  {
+    id: "sh-6",
+    source: "Shipment service",
+    at: "5/4/2026 12:15 PM",
+    detail: "Pending item detected.",
+  },
+  {
+    id: "sh-5",
+    source: "Shipment service",
+    at: "5/4/2026 11:50 AM",
+    detail: "Status moved to on hold with reason CSR hold.",
+  },
+  {
+    id: "sh-4",
+    source: "Shipment service",
+    at: "5/4/2026 11:28 AM",
+    detail: "Status moved to ready to pack.",
+  },
+  {
+    id: "sh-3",
+    source: "Shipment service route assignment",
+    at: "5/4/2026 11:05 AM",
+    detail: "Route assigned.",
+  },
+  {
+    id: "sh-2",
+    source: "Shipment service",
+    at: "5/4/2026 10:42 AM",
+    detail: "Status moved to draft.",
+  },
+  {
+    id: "sh-1",
+    source: "Shipment service create shipment",
+    at: "5/4/2026 10:15 AM",
+    detail: "Shipment created.",
+  },
+];
+
+function HistoryLogDialog({
   open,
   onClose,
-  orderNumber,
+  title,
+  subtitle,
+  entries,
+  captionUppercase = true,
 }: {
   open: boolean;
   onClose: () => void;
-  orderNumber: string;
+  title: string;
+  subtitle: ReactNode;
+  entries: HistoryLogEntry[];
+  /** Order / shipment caption line: uppercase system-style labels when true. */
+  captionUppercase?: boolean;
 }) {
   return (
     <Dialog
@@ -1576,21 +1693,14 @@ function OrderHistoryLogDialog({
         },
       }}
     >
-      <StandardDialogTitle
-        onClose={onClose}
-        subtitle={
-          <Typography variant="body2" color="text.secondary">
-            Order #{orderNumber}
-          </Typography>
-        }
-      >
-        Order History Log
+      <StandardDialogTitle onClose={onClose} subtitle={subtitle}>
+        {title}
       </StandardDialogTitle>
       <Divider />
       <DialogContent sx={{ pt: 2.5, pb: 2 }}>
         <Box sx={{ maxHeight: 440, overflow: "auto", pr: 0.5 }}>
-          {ORDER_HISTORY_LOG.map((entry, index) => {
-            const isLast = index === ORDER_HISTORY_LOG.length - 1;
+          {entries.map((entry, index) => {
+            const isLast = index === entries.length - 1;
             const timelineIndent = "22px";
             return (
               <Box key={entry.id}>
@@ -1642,8 +1752,11 @@ function OrderHistoryLogDialog({
                           variant="caption"
                           color="text.secondary"
                           fontWeight={600}
-                          letterSpacing="0.06em"
-                          sx={{ textTransform: "uppercase", lineHeight: 1.2 }}
+                          letterSpacing={captionUppercase ? "0.06em" : "0.02em"}
+                          sx={{
+                            textTransform: captionUppercase ? "uppercase" : "none",
+                            lineHeight: 1.2,
+                          }}
                         >
                           {entry.source}
                         </Typography>
@@ -1655,9 +1768,11 @@ function OrderHistoryLogDialog({
                           {entry.at}
                         </Typography>
                       </Stack>
-                      <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.5 }}>
-                        {entry.detail}
-                      </Typography>
+                      {entry.detail != null && entry.detail !== "" ? (
+                        <Typography variant="body2" color="text.primary" sx={{ lineHeight: 1.5 }}>
+                          {entry.detail}
+                        </Typography>
+                      ) : null}
                     </Box>
                   </Stack>
                 </Paper>
@@ -1687,6 +1802,56 @@ function OrderHistoryLogDialog({
         </Button>
       </DialogActions>
     </Dialog>
+  );
+}
+
+function OrderHistoryLogDialog({
+  open,
+  onClose,
+  orderNumber,
+}: {
+  open: boolean;
+  onClose: () => void;
+  orderNumber: string;
+}) {
+  return (
+    <HistoryLogDialog
+      open={open}
+      onClose={onClose}
+      title="Order History Log"
+      subtitle={
+        <Typography variant="body2" color="text.secondary">
+          Order #{orderNumber}
+        </Typography>
+      }
+      entries={ORDER_HISTORY_LOG}
+      captionUppercase
+    />
+  );
+}
+
+function ShipmentHistoryLogDialog({
+  open,
+  onClose,
+  shipmentId,
+}: {
+  open: boolean;
+  onClose: () => void;
+  shipmentId: string;
+}) {
+  return (
+    <HistoryLogDialog
+      open={open}
+      onClose={onClose}
+      title="Shipment History Log"
+      subtitle={
+        <Typography variant="body2" color="text.secondary">
+          Shipment #{shipmentId}
+        </Typography>
+      }
+      entries={SHIPMENT_HISTORY_LOG}
+      captionUppercase
+    />
   );
 }
 
@@ -3639,6 +3804,7 @@ export default function ReadyToPack() {
   );
   const [addressDialogOpen, setAddressDialogOpen] = useState(false);
   const [orderHistoryDialogOpen, setOrderHistoryDialogOpen] = useState(false);
+  const [shipmentHistoryDialogOpen, setShipmentHistoryDialogOpen] = useState(false);
   const [sendToFixDialogOpen, setSendToFixDialogOpen] = useState(false);
   const [joinShipmentDialogOpen, setJoinShipmentDialogOpen] = useState(false);
   const [splitShipmentDialogOpen, setSplitShipmentDialogOpen] = useState(false);
@@ -4657,24 +4823,34 @@ export default function ReadyToPack() {
             >
               <Box sx={{ minWidth: 0, width: "100%" }}>
                 <FieldBlock label="Shipment ID">
-                  <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, width: "100%" }}>
-                    <DetailValue>{displayedShipmentId}</DetailValue>
-                    <Box
-                      sx={{
-                        width: 28,
-                        height: 28,
-                        flexShrink: 0,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      {shipmentDetailsEditUnlocked ? (
-                        <Tooltip title="Merukazim">
-                          <NorthEastIcon sx={{ color: "text.secondary", fontSize: 20 }} />
-                        </Tooltip>
-                      ) : null}
-                    </Box>
+                  <Stack
+                    spacing={shipmentDetailsEditUnlocked ? 0.5 : 0}
+                    sx={{ width: "100%", minWidth: 0 }}
+                  >
+                    <Stack direction="row" alignItems="center" spacing={1} sx={{ minWidth: 0, width: "100%" }}>
+                      <DetailValue>{displayedShipmentId}</DetailValue>
+                      <Box
+                        sx={{
+                          width: 28,
+                          height: 28,
+                          flexShrink: 0,
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                        }}
+                      >
+                        {shipmentDetailsEditUnlocked ? (
+                          <Tooltip title="Merukazim">
+                            <NorthEastIcon sx={{ color: "text.secondary", fontSize: 20 }} />
+                          </Tooltip>
+                        ) : null}
+                      </Box>
+                    </Stack>
+                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                      <ShipmentFieldActionLink onClick={() => setShipmentHistoryDialogOpen(true)}>
+                        View History
+                      </ShipmentFieldActionLink>
+                    </ShipmentFieldActionArea>
                   </Stack>
                 </FieldBlock>
               </Box>
@@ -6321,6 +6497,13 @@ export default function ReadyToPack() {
           open={orderHistoryDialogOpen}
           onClose={() => setOrderHistoryDialogOpen(false)}
           orderNumber={displayedOrderNumberForDetails ?? loadedOrderId ?? ""}
+        />
+      )}
+      {loadedOrderId && (
+        <ShipmentHistoryLogDialog
+          open={shipmentHistoryDialogOpen}
+          onClose={() => setShipmentHistoryDialogOpen(false)}
+          shipmentId={displayedShipmentId}
         />
       )}
       {loadedOrderId && (
