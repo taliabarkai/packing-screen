@@ -4205,8 +4205,7 @@ export default function ReadyToPack() {
     isPackActionsBlocked || isSortingStationView || isLinkedOrderNonPrimaryTab;
   const packingStatusChip = getPackingStatusChipConfig(packingOrderUiStatus, theme);
   const StatusChipIcon = packingStatusChip.Icon;
-  const readyToPackStatusChip = getPackingStatusChipConfig("readyToPack", theme);
-  const ReadyToPackStatusIcon = readyToPackStatusChip.Icon;
+  const ReadyToPackStatusIcon = getPackingStatusChipConfig("readyToPack", theme).Icon;
   const onHoldStatusMenuOpen = Boolean(onHoldStatusMenuAnchor);
   const userProfileMenuOpen = Boolean(userProfileMenuAnchor);
 
@@ -4265,6 +4264,8 @@ export default function ReadyToPack() {
     const isFixQueue = isPrototypePendingOrderId(loadedOrderId);
     const isCancelledProto = isPrototypeCancelledOrderId(loadedOrderId);
     const isOnHoldProto = isPrototypeOnHoldOrderId(loadedOrderId);
+    const isSortStationProto = isSortingStationOrderId(loadedOrderId);
+    const isRobotStationProto = isRobotStationOrderId(loadedOrderId);
     const isPackedProto = isPrototypePackedOrderId(loadedOrderId);
     if (isCancelledProto) {
       setPackingOrderUiStatus("cancelled");
@@ -4272,7 +4273,7 @@ export default function ReadyToPack() {
     } else if (isFixQueue) {
       setPackingOrderUiStatus("pending");
       setSentToFixReason(PROTOTYPE_PENDING_SENT_TO_FIX_BODY);
-    } else if (isOnHoldProto) {
+    } else if (isOnHoldProto || isSortStationProto || isRobotStationProto) {
       setPackingOrderUiStatus("onHold");
       setSentToFixReason(null);
     } else if (isPackedProto) {
@@ -6006,8 +6007,12 @@ export default function ReadyToPack() {
                   >
                     <MenuItem
                       onClick={() => {
-                        setPackingOrderUiStatus("readyToPack");
                         setOnHoldStatusMenuAnchor(null);
+                        if (isSortingStationOrderId(loadedOrderId) || isRobotStationOrderId(loadedOrderId)) {
+                          handleLoadOrderFromInput(PROTOTYPE_PACK_ORDER_ID);
+                          return;
+                        }
+                        setPackingOrderUiStatus("readyToPack");
                         if (isPrototypeOnHoldOrderId(loadedOrderId)) {
                           const stayingRemote = remoteFacilityItemIds.filter((id) =>
                             PROTOTYPE_ON_HOLD_REMOTE_FACILITY_ITEM_IDS.includes(id),
@@ -6018,13 +6023,13 @@ export default function ReadyToPack() {
                         }
                       }}
                     >
-                      <ListItemIcon sx={{ minWidth: 40 }}>
+                      <ListItemIcon sx={{ minWidth: 44 }}>
                         <ReadyToPackStatusIcon
                           sx={{
-                            color: `${readyToPackStatusChip.color} !important`,
-                            fontSize: readyToPackStatusChip.iconSize,
-                            width: readyToPackStatusChip.iconSize,
-                            height: readyToPackStatusChip.iconSize,
+                            color: "action.active",
+                            fontSize: 22,
+                            width: 22,
+                            height: 22,
                           }}
                         />
                       </ListItemIcon>
@@ -6032,7 +6037,7 @@ export default function ReadyToPack() {
                     </MenuItem>
                   </Menu>
                 </Stack>
-                {packingOrderUiStatus === "onHold" ? (
+                {packingOrderUiStatus === "onHold" && !isSortingStationView ? (
                   <Alert
                     data-node-id="2052:23611"
                     severity="info"
