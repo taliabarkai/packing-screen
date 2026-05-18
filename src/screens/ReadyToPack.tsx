@@ -204,6 +204,13 @@ type JoinTransferItem = {
   image: string;
   /** Items from the external shipment can move between columns. */
   movable: boolean;
+  /** Multi-source join: return Move on current column to this shipment. */
+  returnToSourceShipmentId?: string;
+};
+
+type JoinSourceShipmentColumn = {
+  shipmentId: string;
+  items: JoinTransferItem[];
 };
 
 /** Shared line copy for Product-4 asset (split secondary tab + join source column). */
@@ -249,6 +256,13 @@ function joinLayoutKey(source: JoinTransferItem[], current: JoinTransferItem[]) 
   return `${source.map((i) => i.id).join(",")}|${current.map((i) => i.id).join(",")}`;
 }
 
+function joinMultiSourceLayoutKey(sources: JoinSourceShipmentColumn[], current: JoinTransferItem[]) {
+  const left = sources
+    .map((s) => `${s.shipmentId}:${s.items.map((i) => i.id).join(",")}`)
+    .join(";");
+  return `${left}|${current.map((i) => i.id).join(",")}`;
+}
+
 const elevationSx = {
   boxShadow:
     "0px 1px 3px 0px rgba(0,0,0,0.12), 0px 1px 1px 0px rgba(0,0,0,0.14), 0px 2px 1px 0px rgba(0,0,0,0.2)",
@@ -284,6 +298,7 @@ const PROTOTYPE_SEARCH_KEYWORDS = [
   "robot",
   "hold",
   "similar",
+  "similar-multiple",
   "split",
   "packed",
   "cancelled",
@@ -325,6 +340,8 @@ const PROTOTYPE_CANCELLED_ORDER_ID = "cancelled";
 const PROTOTYPE_ON_HOLD_ORDER_ID = "hold";
 /** Prototype: similar orders (same address) — search `similar`; tabs to switch orders (Figma 2314:30804). */
 const PROTOTYPE_SIMILAR_ORDERS_ORDER_ID = "similar";
+/** Same as `similar`, but join dialog lists two source shipments at once — search `similar-multiple`. */
+const PROTOTYPE_SIMILAR_MULTIPLE_ORDERS_ORDER_ID = "similar-multiple";
 /** Prototype: linked split shipments — search `split` or finish Split Shipment dialog; tabs for original + new. */
 const PROTOTYPE_SPLIT_ORDER_ID = "split";
 
@@ -352,6 +369,18 @@ const SIMILAR_ORDER_TABS: SimilarOrderTab[] = [
     shipmentId: "SH-92834",
     orderNumber: "5847220",
     tabLabel: "Order 5847220",
+    factoryLabel: "KG",
+  },
+];
+
+/** `similar-multiple`: current shipment + two similar sources (join dialog SH-92834 / SH-74513). */
+const SIMILAR_MULTIPLE_ORDER_TABS: SimilarOrderTab[] = [
+  ...SIMILAR_ORDER_TABS,
+  {
+    key: "similar-c",
+    shipmentId: "SH-74513",
+    orderNumber: "5847221",
+    tabLabel: "Order 5847221",
     factoryLabel: "KG",
   },
 ];
@@ -388,6 +417,33 @@ const SIMILAR_ORDER_SECOND_TAB_ITEM: JoinTransferItem = {
   movable: false,
 };
 
+/** Third `similar-multiple` tab (SH-74513): same line as join dialog source. */
+const SIMILAR_MULTIPLE_THIRD_TAB_ITEM: JoinTransferItem = {
+  id: "join-ext-sh74513-1",
+  title: PRODUCT_4_LINE_TITLE,
+  image: product4Img,
+  movable: false,
+};
+
+/** `similar-multiple` join dialog: both non-current similar shipments on the left. */
+const SIMILAR_MULTIPLE_JOIN_SOURCE_SHIPMENTS: JoinSourceShipmentColumn[] = [
+  {
+    shipmentId: "SH-92834",
+    items: JOIN_SOURCE_SEED.map((x) => ({ ...x })),
+  },
+  {
+    shipmentId: "SH-74513",
+    items: [
+      {
+        id: "join-ext-sh74513-1",
+        title: PRODUCT_4_LINE_TITLE,
+        image: product4Img,
+        movable: true,
+      },
+    ],
+  },
+];
+
 /** `SIMILAR_ORDER_TABS` index for the shipment currently being packed (default selected tab). */
 const SIMILAR_ORDER_CURRENT_SHIPMENT_TAB_INDEX = 0;
 
@@ -407,6 +463,7 @@ const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_MANUAL_PACK_ORDER_ID,
   PROTOTYPE_FALLBACK_ORDER_ID,
   PROTOTYPE_SIMILAR_ORDERS_ORDER_ID,
+  PROTOTYPE_SIMILAR_MULTIPLE_ORDERS_ORDER_ID,
   PROTOTYPE_SPLIT_ORDER_ID,
   PROTOTYPE_PACKED_ORDER_ID,
   PROTOTYPE_CANCELLED_ORDER_ID,
@@ -442,6 +499,14 @@ function isPrototypeOnHoldOrderId(id: string | null): boolean {
 
 function isPrototypeSimilarOrdersId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
+}
+
+function isPrototypeSimilarMultipleOrdersId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_SIMILAR_MULTIPLE_ORDERS_ORDER_ID;
+}
+
+function isPrototypeSimilarLinkedOrdersId(id: string | null): boolean {
+  return isPrototypeSimilarOrdersId(id) || isPrototypeSimilarMultipleOrdersId(id);
 }
 
 function isPrototypeSplitOrdersId(id: string | null): boolean {
@@ -505,6 +570,7 @@ function normalizeOrderIdForLoad(raw: string): string {
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
   if (lower === PROTOTYPE_ON_HOLD_ORDER_ID) return PROTOTYPE_ON_HOLD_ORDER_ID;
   if (lower === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID) return PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
+  if (lower === PROTOTYPE_SIMILAR_MULTIPLE_ORDERS_ORDER_ID) return PROTOTYPE_SIMILAR_MULTIPLE_ORDERS_ORDER_ID;
   if (lower === PROTOTYPE_SPLIT_ORDER_ID) return PROTOTYPE_SPLIT_ORDER_ID;
   return t;
 }
@@ -814,7 +880,7 @@ function ItemPackingInstructionsCard({
         sx={{
           width: "100%",
           height: "100%",
-          objectFit: "cover",
+          objectFit: isShipment ? "cover" : "contain",
           display: "block",
         }}
       />
@@ -836,11 +902,9 @@ function ItemPackingInstructionsCard({
     <Stack
       spacing={1}
       sx={{
-        flex: { xs: "1 1 auto", sm: "0 0 auto" },
-        width: { xs: "100%", sm: 262 },
-        minWidth: { xs: 0, sm: 262 },
-        maxWidth: { xs: "100%", sm: 262 },
-        flexShrink: 0,
+        flex: "1 1 auto",
+        minWidth: 0,
+        maxWidth: 262,
         boxSizing: "border-box",
         p: 2,
         justifyContent: "center",
@@ -907,7 +971,10 @@ function ItemPackingInstructionsCard({
       aria-label={imageOnly ? "Show packing instructions text" : "Show image only"}
       aria-pressed={imageOnly}
       focusRipple
-      sx={toggleShellSx}
+      sx={{
+        ...toggleShellSx,
+        width: { xs: "100%", sm: "fit-content" },
+      }}
     >
       <Paper
         variant="outlined"
@@ -916,12 +983,12 @@ function ItemPackingInstructionsCard({
           display: "flex",
           flexDirection: { xs: "column", sm: "row" },
           flexWrap: "nowrap",
-          alignItems: "center",
+          alignItems: { xs: "stretch", sm: "center" },
           justifyContent: imageOnly ? "center" : undefined,
           borderRadius: 2,
-          overflow: "hidden",
+          overflow: "visible",
           borderColor: "divider",
-          width: "100%",
+          width: { xs: "100%", sm: "fit-content" },
           maxWidth: "100%",
           minWidth: 0,
           boxSizing: "border-box",
@@ -936,7 +1003,7 @@ function ItemPackingInstructionsCard({
 
 function DetailRow({ label, value }: { label: string; value: string }) {
   return (
-    <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ width: "100%" }}>
+    <Stack direction="row" spacing={3} alignItems="flex-start" sx={{ width: "100%", minWidth: 0 }}>
       <Typography variant="body1" color="text.secondary" sx={{ width: 120, flexShrink: 0 }}>
         {label}
       </Typography>
@@ -944,7 +1011,7 @@ function DetailRow({ label, value }: { label: string; value: string }) {
         variant="body1"
         fontWeight={500}
         color="text.primary"
-        sx={{ flex: "1 1 0", minWidth: 0, wordBreak: "break-word" }}
+        sx={{ flex: "1 1 auto", minWidth: 0, wordBreak: "break-word" }}
       >
         {value}
       </Typography>
@@ -2608,11 +2675,98 @@ function splitNewShipmentDisplayRef(id: string | null) {
   return `#${t}`;
 }
 
+function JoinShipmentSourceSection({
+  shipmentId,
+  items,
+  onMoveToCurrent,
+  onClear,
+  showClear = true,
+}: {
+  shipmentId: string;
+  items: JoinTransferItem[];
+  onMoveToCurrent: (itemId: string) => void;
+  onClear?: () => void;
+  showClear?: boolean;
+}) {
+  return (
+    <Stack spacing={1.5} sx={{ minWidth: 0 }}>
+      <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
+        <Typography variant="subtitle1" fontWeight={600} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
+          Shipment {joinShipmentDisplayRef(shipmentId)} ({items.length} items)
+        </Typography>
+        {showClear && onClear ? (
+          <IconButton aria-label="Clear shipment" size="small" onClick={onClear}>
+            <CloseIcon fontSize="small" />
+          </IconButton>
+        ) : null}
+      </Stack>
+      <Stack spacing={1.5}>
+        {items.length === 0 ? (
+          <Stack alignItems="center" justifyContent="center" spacing={1.5} sx={{ px: 3, py: 4, minHeight: 120 }}>
+            <Inventory2OutlinedIcon sx={{ fontSize: 32, color: "action.disabled" }} />
+            <Typography
+              variant="body1"
+              color="text.secondary"
+              textAlign="center"
+              sx={{ letterSpacing: "0.15px", lineHeight: 1.5 }}
+            >
+              No Items Available
+            </Typography>
+          </Stack>
+        ) : (
+          items.map((item) => (
+            <Paper
+              key={item.id}
+              variant="outlined"
+              sx={{
+                p: 1.5,
+                borderRadius: 1,
+                borderColor: "divider",
+                display: "flex",
+                alignItems: "center",
+                gap: 1.5,
+              }}
+            >
+              <Box
+                component="img"
+                src={item.image}
+                alt=""
+                sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
+              />
+              <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
+                {item.title}
+              </Typography>
+              {item.movable ? (
+                <Button
+                  size="small"
+                  color="primary"
+                  endIcon={<ArrowForwardIcon sx={{ fontSize: 18 }} />}
+                  onClick={() => onMoveToCurrent(item.id)}
+                  sx={{
+                    flexShrink: 0,
+                    textTransform: "none",
+                    fontWeight: 600,
+                    minWidth: "auto",
+                    px: 0.5,
+                  }}
+                >
+                  Move
+                </Button>
+              ) : null}
+            </Paper>
+          ))
+        )}
+      </Stack>
+    </Stack>
+  );
+}
+
 function JoinShipmentDialog({
   open,
   onClose,
   currentShipmentId,
   prefillSourceShipmentId = null,
+  dualSourceShipments = null,
   onConfirm,
 }: {
   open: boolean;
@@ -2620,20 +2774,39 @@ function JoinShipmentDialog({
   currentShipmentId: string;
   /** When set (e.g. similar-order pair), left column loads this shipment immediately. */
   prefillSourceShipmentId?: string | null;
+  /** When set (`similar-multiple`), left column shows each shipment section without scan. */
+  dualSourceShipments?: JoinSourceShipmentColumn[] | null;
   onConfirm?: (nextCurrentItems: JoinTransferItem[]) => void;
 }) {
   const [sourceShipmentInput, setSourceShipmentInput] = useState("");
   const [loadedSourceId, setLoadedSourceId] = useState<string | null>(null);
   const [sourceItems, setSourceItems] = useState<JoinTransferItem[]>([]);
+  const [multiSourceColumns, setMultiSourceColumns] = useState<JoinSourceShipmentColumn[]>([]);
   const [currentItems, setCurrentItems] = useState<JoinTransferItem[]>([]);
   const [initialLayoutKey, setInitialLayoutKey] = useState("");
 
+  const isDualSourceMode = dualSourceShipments != null && dualSourceShipments.length > 0;
+
   useEffect(() => {
     if (!open) return;
+    const nextCurrent = JOIN_CURRENT_SEED.map((x) => ({ ...x }));
+    if (isDualSourceMode && dualSourceShipments) {
+      const nextSources = dualSourceShipments.map((col) => ({
+        shipmentId: col.shipmentId,
+        items: col.items.map((x) => ({ ...x })),
+      }));
+      setMultiSourceColumns(nextSources);
+      setLoadedSourceId(null);
+      setSourceItems([]);
+      setSourceShipmentInput("");
+      setCurrentItems(nextCurrent);
+      setInitialLayoutKey(joinMultiSourceLayoutKey(nextSources, nextCurrent));
+      return;
+    }
     const prefill = prefillSourceShipmentId?.trim();
     if (prefill) {
       const nextSource = JOIN_SOURCE_SEED.map((x) => ({ ...x }));
-      const nextCurrent = JOIN_CURRENT_SEED.map((x) => ({ ...x }));
+      setMultiSourceColumns([]);
       setLoadedSourceId(prefill);
       setSourceShipmentInput(prefill);
       setSourceItems(nextSource);
@@ -2641,16 +2814,21 @@ function JoinShipmentDialog({
       setInitialLayoutKey(joinLayoutKey(nextSource, nextCurrent));
       return;
     }
+    setMultiSourceColumns([]);
     setSourceShipmentInput("");
     setLoadedSourceId(null);
     setSourceItems([]);
-    setCurrentItems(JOIN_CURRENT_SEED.map((x) => ({ ...x })));
+    setCurrentItems(nextCurrent);
     setInitialLayoutKey("");
-  }, [open, prefillSourceShipmentId, currentShipmentId]);
+  }, [open, prefillSourceShipmentId, currentShipmentId, isDualSourceMode, dualSourceShipments]);
 
-  const layoutKey = joinLayoutKey(sourceItems, currentItems);
+  const layoutKey = isDualSourceMode
+    ? joinMultiSourceLayoutKey(multiSourceColumns, currentItems)
+    : joinLayoutKey(sourceItems, currentItems);
   const transferDirty =
-    Boolean(loadedSourceId) && initialLayoutKey.length > 0 && layoutKey !== initialLayoutKey;
+    initialLayoutKey.length > 0 &&
+    layoutKey !== initialLayoutKey &&
+    (isDualSourceMode || Boolean(loadedSourceId));
 
   const handleLoadSource = () => {
     const id = sourceShipmentInput.trim() || "5928503726";
@@ -2670,7 +2848,7 @@ function JoinShipmentDialog({
     setInitialLayoutKey("");
   };
 
-  const moveToCurrent = (id: string) => {
+  const moveToCurrentFromSource = (id: string) => {
     let moved: JoinTransferItem | null = null;
     setSourceItems((prev) => {
       const item = prev.find((i) => i.id === id);
@@ -2684,18 +2862,40 @@ function JoinShipmentDialog({
     }
   };
 
+  const moveToCurrentFromMultiSource = (sourceShipmentId: string, itemId: string) => {
+    const column = multiSourceColumns.find((col) => col.shipmentId === sourceShipmentId);
+    const item = column?.items.find((i) => i.id === itemId);
+    if (!item?.movable) return;
+    setMultiSourceColumns((prev) =>
+      prev.map((col) =>
+        col.shipmentId === sourceShipmentId
+          ? { ...col, items: col.items.filter((i) => i.id !== itemId) }
+          : col,
+      ),
+    );
+    setCurrentItems((c) => [
+      ...c,
+      { ...item, movable: true, returnToSourceShipmentId: sourceShipmentId },
+    ]);
+  };
+
   const moveToSource = (id: string) => {
-    let moved: JoinTransferItem | null = null;
-    setCurrentItems((prev) => {
-      const item = prev.find((i) => i.id === id);
-      if (!item?.movable) return prev;
-      moved = item;
-      return prev.filter((i) => i.id !== id);
-    });
-    if (moved) {
-      const item = moved;
-      setSourceItems((s) => [...s, item]);
+    const item = currentItems.find((i) => i.id === id);
+    if (!item?.movable) return;
+    const returnShipmentId = item.returnToSourceShipmentId;
+    setCurrentItems((prev) => prev.filter((i) => i.id !== id));
+    if (returnShipmentId && isDualSourceMode) {
+      const { returnToSourceShipmentId: _drop, ...rest } = item;
+      setMultiSourceColumns((cols) =>
+        cols.map((col) =>
+          col.shipmentId === returnShipmentId
+            ? { ...col, items: [...col.items, { ...rest, movable: true }] }
+            : col,
+        ),
+      );
+      return;
     }
+    setSourceItems((s) => [...s, item]);
   };
 
   const handleConfirm = () => {
@@ -2741,7 +2941,19 @@ function JoinShipmentDialog({
       >
         <Stack direction="row" spacing={0} sx={{ flex: 1, minHeight: 0, alignItems: "stretch" }}>
           <Stack sx={{ flex: "1 1 0%", minWidth: 0, pr: 2 }} spacing={2}>
-            {!loadedSourceId ? (
+            {isDualSourceMode ? (
+              <Stack spacing={3} sx={{ overflow: "auto", pr: 0.5, flex: 1, minHeight: 0 }}>
+                {multiSourceColumns.map((col) => (
+                  <JoinShipmentSourceSection
+                    key={col.shipmentId}
+                    shipmentId={col.shipmentId}
+                    items={col.items}
+                    showClear={false}
+                    onMoveToCurrent={(itemId) => moveToCurrentFromMultiSource(col.shipmentId, itemId)}
+                  />
+                ))}
+              </Stack>
+            ) : !loadedSourceId ? (
               <Paper
                 variant="outlined"
                 sx={{
@@ -2781,79 +2993,14 @@ function JoinShipmentDialog({
                 </Stack>
               </Paper>
             ) : (
-              <>
-                <Stack direction="row" alignItems="flex-start" justifyContent="space-between" spacing={1}>
-                  <Typography variant="subtitle1" fontWeight={600} color="text.primary" sx={{ letterSpacing: "0.15px" }}>
-                    Shipment {joinShipmentDisplayRef(loadedSourceId)} ({sourceItems.length} items)
-                  </Typography>
-                  <IconButton aria-label="Clear shipment" size="small" onClick={handleClearLoadedSource}>
-                    <CloseIcon fontSize="small" />
-                  </IconButton>
-                </Stack>
-                <Stack spacing={1.5} sx={{ overflow: "auto", pr: 0.5, flex: 1, minHeight: 0 }}>
-                  {sourceItems.length === 0 ? (
-                    <Stack
-                      flex={1}
-                      alignItems="center"
-                      justifyContent="center"
-                      spacing={1.5}
-                      sx={{ px: 3, py: 6, minHeight: 240 }}
-                    >
-                      <Inventory2OutlinedIcon sx={{ fontSize: 32, color: "action.disabled" }} />
-                      <Typography
-                        variant="body1"
-                        color="text.secondary"
-                        textAlign="center"
-                        sx={{ letterSpacing: "0.15px", lineHeight: 1.5 }}
-                      >
-                        No Items Available
-                      </Typography>
-                    </Stack>
-                  ) : (
-                    sourceItems.map((item) => (
-                      <Paper
-                        key={item.id}
-                        variant="outlined"
-                        sx={{
-                          p: 1.5,
-                          borderRadius: 1,
-                          borderColor: "divider",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: 1.5,
-                        }}
-                      >
-                        <Box
-                          component="img"
-                          src={item.image}
-                          alt=""
-                          sx={{ width: 56, height: 56, borderRadius: 0.5, objectFit: "cover", flexShrink: 0 }}
-                        />
-                        <Typography variant="body2" fontWeight={500} sx={{ flex: "1 1 auto", minWidth: 0, lineHeight: 1.4 }}>
-                          {item.title}
-                        </Typography>
-                        {item.movable ? (
-                          <Button
-                            size="small"
-                            color="primary"
-                            endIcon={<ArrowForwardIcon sx={{ fontSize: 18 }} />}
-                            onClick={() => moveToCurrent(item.id)}
-                            sx={{
-                              flexShrink: 0,
-                              textTransform: "none",
-                              fontWeight: 600,
-                              minWidth: "auto",
-                              px: 0.5,
-                            }}
-                          >
-                            Move
-                          </Button>
-                        ) : null}
-                      </Paper>
-                    ))
-                  )}
-                </Stack>
-              </>
+              <Stack spacing={1.5} sx={{ overflow: "auto", pr: 0.5, flex: 1, minHeight: 0 }}>
+                <JoinShipmentSourceSection
+                  shipmentId={loadedSourceId}
+                  items={sourceItems}
+                  onMoveToCurrent={moveToCurrentFromSource}
+                  onClear={handleClearLoadedSource}
+                />
+              </Stack>
             )}
           </Stack>
 
@@ -3862,7 +4009,8 @@ export default function ReadyToPack() {
     isSortingStationOrderId(loadedOrderId) || isRobotStationOrderId(loadedOrderId);
   /** Robot prototype only: container row shows “Robot” / “Cell 27” instead of sort-station copy. */
   const robotCellAssignUi = isRobotStationOrderId(loadedOrderId);
-  const isSimilarOrdersView = isPrototypeSimilarOrdersId(loadedOrderId);
+  const isSimilarMultipleOrdersView = isPrototypeSimilarMultipleOrdersId(loadedOrderId);
+  const isSimilarOrdersView = isPrototypeSimilarLinkedOrdersId(loadedOrderId);
   const isSplitOrdersView = isPrototypeSplitOrdersId(loadedOrderId);
   const isFallbackPrototype = isPrototypeFallbackOrderId(loadedOrderId);
   const showShipmentLevelInstructionsPanel = isPrototypeInstructionShipmentLevelOrderId(loadedOrderId);
@@ -3901,9 +4049,13 @@ export default function ReadyToPack() {
     }));
   }, [isSplitOrdersView, splitLinkedPair, prototypeFactorySiteView]);
 
+  const similarOrderTabsResolved = useMemo(
+    () => (isSimilarMultipleOrdersView ? SIMILAR_MULTIPLE_ORDER_TABS : SIMILAR_ORDER_TABS),
+    [isSimilarMultipleOrdersView],
+  );
   const similarShipmentTabIndex = Math.min(
     similarOrdersTabIndex,
-    SIMILAR_ORDER_TABS.length - 1,
+    Math.max(0, similarOrderTabsResolved.length - 1),
   );
   const splitShipmentTabIndex = Math.min(
     splitOrdersTabIndex,
@@ -3911,9 +4063,9 @@ export default function ReadyToPack() {
   );
   const similarOrderDetailIndex = isSimilarOrdersView ? similarShipmentTabIndex : 0;
   const activeSimilarOrder =
-    isSimilarOrdersView && SIMILAR_ORDER_TABS[similarOrderDetailIndex]
-      ? SIMILAR_ORDER_TABS[similarOrderDetailIndex]
-      : SIMILAR_ORDER_TABS[0];
+    isSimilarOrdersView && similarOrderTabsResolved[similarOrderDetailIndex]
+      ? similarOrderTabsResolved[similarOrderDetailIndex]
+      : similarOrderTabsResolved[0];
   const activeSplitOrder =
     isSplitOrdersView && splitOrderTabsResolved[splitShipmentTabIndex]
       ? splitOrderTabsResolved[splitShipmentTabIndex]
@@ -3948,8 +4100,11 @@ export default function ReadyToPack() {
           ? "SH-12345"
           : loadedOrderId ?? "";
 
-  /** Similar orders: tab 0 full list, tab 1 only the differing product. Split: dialog inventories or default prototype second tab. */
+  /** Similar orders: tab 0 full list; tab 1+ preview lines per linked shipment. Split: dialog inventories or default prototype second tab. */
   const packItemsResolved = useMemo(() => {
+    if (isSimilarMultipleOrdersView && similarShipmentTabIndex === 2) {
+      return [SIMILAR_MULTIPLE_THIRD_TAB_ITEM];
+    }
     if (isSimilarOrdersView && similarShipmentTabIndex === 1) {
       return [SIMILAR_ORDER_SECOND_TAB_ITEM];
     }
@@ -3960,6 +4115,7 @@ export default function ReadyToPack() {
     return splitShipmentTabIndex === 0 ? splitTabInventories.original : splitTabInventories.newShipment;
   }, [
     isSimilarOrdersView,
+    isSimilarMultipleOrdersView,
     similarShipmentTabIndex,
     isSplitOrdersView,
     splitTabInventories,
@@ -4032,10 +4188,12 @@ export default function ReadyToPack() {
 
   /** Other similar-order tab: prefill join dialog source column when opening from the pair UI. */
   const joinPrefillSourceShipmentId = useMemo(() => {
-    if (!isSimilarOrdersView || SIMILAR_ORDER_TABS.length < 2) return null;
+    if (!isSimilarOrdersView || isSimilarMultipleOrdersView || similarOrderTabsResolved.length < 2) {
+      return null;
+    }
     const otherIndex = similarShipmentTabIndex === 0 ? 1 : 0;
-    return SIMILAR_ORDER_TABS[otherIndex].shipmentId;
-  }, [isSimilarOrdersView, similarShipmentTabIndex]);
+    return similarOrderTabsResolved[otherIndex].shipmentId;
+  }, [isSimilarOrdersView, isSimilarMultipleOrdersView, similarOrderTabsResolved, similarShipmentTabIndex]);
   const activeRoute = findShippingRoute(activeCarrierRouteId) ?? SHIPPING_ROUTE_ROWS[0];
   const activeCarrierLogoSrc = findCarrierLogoSrc(activeRoute);
   /** Non-primary tab on split or similar-order pair: preview only — no pack column or reviewed checkbox (tab 0 packs). */
@@ -5160,7 +5318,7 @@ export default function ReadyToPack() {
                   </Typography>
                   {isSimilarOrdersView ? (
                     <LinkedShipmentTabs
-                      tabs={SIMILAR_ORDER_TABS.map((t) => ({
+                      tabs={similarOrderTabsResolved.map((t) => ({
                         key: t.key,
                         shipmentId: t.shipmentId,
                         factoryLabel: t.factoryLabel,
@@ -5321,6 +5479,7 @@ export default function ReadyToPack() {
                       <SectionOverline>Details</SectionOverline>
                       {item.id === "split-proto-product-4" ||
                       item.id === "similar-order-product-4" ||
+                      item.id === "join-ext-sh74513-1" ||
                       item.id === "join-ext-1" ? (
                         <>
                           <DetailRow label="Material:" value="18K Gold Vermeil" />
@@ -5959,7 +6118,7 @@ export default function ReadyToPack() {
                         <AlertTitle
                           sx={{ mb: 0, mt: 0, flex: "1 1 auto", minWidth: 0, pr: 1, lineHeight: 1.43 }}
                         >
-                          Similar order found.
+                          {isSimilarMultipleOrdersView ? "Similar orders found." : "Similar order found."}
                         </AlertTitle>
                         <Link
                           component="button"
@@ -5973,7 +6132,7 @@ export default function ReadyToPack() {
                             flexShrink: 0,
                           }}
                         >
-                          Join Shipment
+                          {isSimilarMultipleOrdersView ? "Join Shipments" : "Join Shipment"}
                         </Link>
                       </Stack>
                     </Alert>
@@ -6531,8 +6690,16 @@ export default function ReadyToPack() {
           onClose={() => setJoinShipmentDialogOpen(false)}
           currentShipmentId={joinDialogShipmentId}
           prefillSourceShipmentId={joinPrefillSourceShipmentId}
+          dualSourceShipments={
+            isSimilarMultipleOrdersView ? SIMILAR_MULTIPLE_JOIN_SOURCE_SHIPMENTS : null
+          }
           onConfirm={(nextCurrentItems) => {
-            setPackItems(nextCurrentItems.map((x) => ({ ...x, movable: false })));
+            setPackItems(
+              nextCurrentItems.map(({ returnToSourceShipmentId: _returnId, ...x }) => ({
+                ...x,
+                movable: false,
+              })),
+            );
             setItemsReviewed(false);
           }}
         />
@@ -7138,26 +7305,25 @@ function ItemBlock({
         </Box>
 
         <Stack
-          direction={{ xs: "column", md: "row" }}
+          direction={{ xs: "column", lg: "row" }}
           flex={1}
           alignItems="flex-start"
+          spacing={{ xs: 2, lg: 0 }}
           sx={{
-            width: { xs: "100%", md: "auto" },
+            width: "100%",
             minWidth: 0,
-            gap: 0,
           }}
         >
           <Stack
             spacing={0.5}
             sx={{
-              flex: packaging ? { md: "1 1 0%" } : "1 1 auto",
+              flex: packaging ? { lg: "1 1 0%" } : "1 1 auto",
               minWidth: 0,
-              width: { xs: "100%", md: "auto" },
+              width: "100%",
               boxSizing: "border-box",
-              pr: { md: packaging ? 3 : 0 },
-              borderColor: "divider",
-              pb: packaging ? { xs: 2, md: 0 } : 0,
-              borderBottom: packaging ? { xs: "1px solid", md: "none" } : "none",
+              pr: { lg: packaging ? 3 : 0 },
+              pb: packaging ? { xs: 2, lg: 0 } : 0,
+              borderBottom: "none",
             }}
           >
             {details}
@@ -7166,13 +7332,12 @@ function ItemBlock({
             <Stack
               spacing={0.5}
               sx={{
-                flex: { md: "0 0 auto" },
-                minWidth: { md: 428 },
-                maxWidth: { md: 460 },
-                width: { xs: "100%", md: "auto" },
+                flex: { lg: "0 0 auto" },
+                width: { xs: "100%", lg: "fit-content" },
+                maxWidth: "100%",
+                alignSelf: { lg: "flex-start" },
                 boxSizing: "border-box",
-                pl: { md: 3 },
-                pt: { xs: 0, md: 0 },
+                pl: { lg: 3 },
               }}
             >
               {packaging}
