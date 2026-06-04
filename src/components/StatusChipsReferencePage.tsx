@@ -1,5 +1,4 @@
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
-import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import { Box, Chip, Container, Link, Paper, Stack, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Typography } from "@mui/material";
 import { useTheme, type Theme } from "@mui/material/styles";
 import type { SvgIconComponent } from "@mui/icons-material";
@@ -41,18 +40,6 @@ const REFERENCE_ONLY_BY_KEY = {
       borderColor: "transparent",
     },
   },
-  shipped: {
-    key: "shipped",
-    statusLabel: "Shipped",
-    config: {
-      label: "Shipped",
-      Icon: LocalShippingOutlinedIcon,
-      iconSize: 18,
-      ...STATUS_CHIP_PALETTE.shipped,
-      border: false,
-      borderColor: "transparent",
-    },
-  },
 } as const satisfies Record<string, StatusChipReferenceRow>;
 
 type ReferencePackingStatus = Exclude<PackingOrderUiStatus, "packApiFailed">;
@@ -62,6 +49,7 @@ const PACKING_REFERENCE_LABELS: Record<ReferencePackingStatus, string> = {
   onHold: "On Hold",
   readyToPack: "Ready to Pack",
   packed: "Packed",
+  shipped: "Shipped",
   cancelled: "Cancelled",
 };
 
@@ -75,7 +63,7 @@ const REFERENCE_CHIP_ORDER: Array<
   { kind: "packing", status: "onHold" },
   { kind: "packing", status: "readyToPack" },
   { kind: "packing", status: "packed" },
-  { kind: "reference", key: "shipped" },
+  { kind: "packing", status: "shipped" },
   { kind: "packing", status: "cancelled" },
 ];
 

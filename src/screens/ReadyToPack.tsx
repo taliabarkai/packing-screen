@@ -301,6 +301,7 @@ const PROTOTYPE_SEARCH_KEYWORDS = [
   "similar-multiple",
   "split",
   "packed",
+  "shipped",
   "cancelled",
 ] as const;
 
@@ -334,6 +335,8 @@ const PROTOTYPE_SORT_STATION_ORDER_ID = "sort";
 const PROTOTYPE_ROBOT_STATION_ORDER_ID = "robot";
 /** Prototype: already packed shipment — search `packed` or Next Order. */
 const PROTOTYPE_PACKED_ORDER_ID = "packed";
+/** Prototype: shipped shipment — search `shipped` or Next Order. */
+const PROTOTYPE_SHIPPED_ORDER_ID = "shipped";
 /** Prototype: cancelled shipment — search `cancelled` or Next Order. */
 const PROTOTYPE_CANCELLED_ORDER_ID = "cancelled";
 /** Prototype: on hold — search `hold` (Figma 1664:19401). */
@@ -466,6 +469,7 @@ const PROTOTYPE_NEXT_ORDER_CYCLE = [
   PROTOTYPE_SIMILAR_MULTIPLE_ORDERS_ORDER_ID,
   PROTOTYPE_SPLIT_ORDER_ID,
   PROTOTYPE_PACKED_ORDER_ID,
+  PROTOTYPE_SHIPPED_ORDER_ID,
   PROTOTYPE_CANCELLED_ORDER_ID,
 ] as const;
 
@@ -515,6 +519,10 @@ function isPrototypeSplitOrdersId(id: string | null): boolean {
 
 function isPrototypePackedOrderId(id: string | null): boolean {
   return id !== null && id.toLowerCase() === PROTOTYPE_PACKED_ORDER_ID;
+}
+
+function isPrototypeShippedOrderId(id: string | null): boolean {
+  return id !== null && id.toLowerCase() === PROTOTYPE_SHIPPED_ORDER_ID;
 }
 
 function isPrototypeInstructionItemLevelOrderId(id: string | null): boolean {
@@ -567,6 +575,7 @@ function normalizeOrderIdForLoad(raw: string): string {
   if (lower === PROTOTYPE_SORT_STATION_ORDER_ID) return PROTOTYPE_SORT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_ROBOT_STATION_ORDER_ID) return PROTOTYPE_ROBOT_STATION_ORDER_ID;
   if (lower === PROTOTYPE_PACKED_ORDER_ID) return PROTOTYPE_PACKED_ORDER_ID;
+  if (lower === PROTOTYPE_SHIPPED_ORDER_ID) return PROTOTYPE_SHIPPED_ORDER_ID;
   if (lower === PROTOTYPE_CANCELLED_ORDER_ID) return PROTOTYPE_CANCELLED_ORDER_ID;
   if (lower === PROTOTYPE_ON_HOLD_ORDER_ID) return PROTOTYPE_ON_HOLD_ORDER_ID;
   if (lower === PROTOTYPE_SIMILAR_ORDERS_ORDER_ID) return PROTOTYPE_SIMILAR_ORDERS_ORDER_ID;
@@ -764,30 +773,46 @@ function FieldBlock({
 function ShipmentFieldActionLink({
   children,
   onClick,
+  disabledReason,
 }: {
   children: ReactNode;
   onClick?: (e: MouseEvent<HTMLAnchorElement>) => void;
+  disabledReason?: string;
 }) {
-  return (
+  const link = (
     <Link
       href="#"
       onClick={(e) => {
         e.preventDefault();
-        onClick?.(e);
+        if (!disabledReason) onClick?.(e);
       }}
-      underline="hover"
+      underline={disabledReason ? "none" : "hover"}
+      aria-disabled={disabledReason ? true : undefined}
       sx={{
         typography: "body1",
         fontWeight: 400,
         letterSpacing: "0.15px",
-        cursor: "pointer",
+        cursor: disabledReason ? "default" : "pointer",
         alignSelf: "flex-start",
-        color: "primary.dark",
+        color: disabledReason ? "text.disabled" : "primary.dark",
+        pointerEvents: disabledReason ? "none" : undefined,
       }}
     >
       {children}
     </Link>
   );
+
+  if (disabledReason) {
+    return (
+      <Tooltip title={disabledReason}>
+        <Box component="span" sx={{ display: "inline-flex", alignSelf: "flex-start" }}>
+          {link}
+        </Box>
+      </Tooltip>
+    );
+  }
+
+  return link;
 }
 
 /** Action link row: collapsed in locked view; smooth height expand when unlocked (grid columns unchanged). */
@@ -4004,6 +4029,7 @@ export default function ReadyToPack() {
   >({});
 
   const orderPacked = packingOrderUiStatus === "packed";
+  const orderShipped = packingOrderUiStatus === "shipped";
   const isPackActionsBlocked = isPackingStatusBlockingActions(packingOrderUiStatus);
   const isSortingStationView =
     isSortingStationOrderId(loadedOrderId) || isRobotStationOrderId(loadedOrderId);
@@ -4202,7 +4228,7 @@ export default function ReadyToPack() {
     (isSimilarOrdersView && similarShipmentTabIndex !== 0);
   /** Hide pack checkbox + pack / send-to-fix / more-actions (sorting station is view-only for pack flow). */
   const hidePackActionsUi =
-    isPackActionsBlocked || isSortingStationView || isLinkedOrderNonPrimaryTab;
+    isPackActionsBlocked || isSortingStationView || isLinkedOrderNonPrimaryTab || orderShipped;
   const packingStatusChip = getPackingStatusChipConfig(packingOrderUiStatus, theme);
   const StatusChipIcon = packingStatusChip.Icon;
   const ReadyToPackStatusIcon = getPackingStatusChipConfig("readyToPack", theme).Icon;
@@ -4267,6 +4293,7 @@ export default function ReadyToPack() {
     const isSortStationProto = isSortingStationOrderId(loadedOrderId);
     const isRobotStationProto = isRobotStationOrderId(loadedOrderId);
     const isPackedProto = isPrototypePackedOrderId(loadedOrderId);
+    const isShippedProto = isPrototypeShippedOrderId(loadedOrderId);
     if (isCancelledProto) {
       setPackingOrderUiStatus("cancelled");
       setSentToFixReason(null);
@@ -4278,6 +4305,10 @@ export default function ReadyToPack() {
       setSentToFixReason(null);
     } else if (isPackedProto) {
       setPackingOrderUiStatus("packed");
+      setSentToFixReason(null);
+      setItemsReviewed(true);
+    } else if (isShippedProto) {
+      setPackingOrderUiStatus("shipped");
       setSentToFixReason(null);
       setItemsReviewed(true);
     } else {
@@ -5120,6 +5151,7 @@ export default function ReadyToPack() {
                             manualTrackingLoadedFromApiRef.current = false;
                             setTrackingManualMode(true);
                           }}
+                          disabledReason={orderShipped ? "This shipment has already been shipped" : undefined}
                         >
                           Add Manual ID
                         </ShipmentFieldActionLink>
@@ -5164,7 +5196,10 @@ export default function ReadyToPack() {
                       )}
                     </Stack>
                     <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
-                      <ShipmentFieldActionLink onClick={() => setCarrierRouteDialogOpen(true)}>
+                      <ShipmentFieldActionLink
+                        onClick={() => setCarrierRouteDialogOpen(true)}
+                        disabledReason={orderShipped ? "This shipment has already been shipped" : undefined}
+                      >
                         Edit Shipping Route
                       </ShipmentFieldActionLink>
                     </ShipmentFieldActionArea>
@@ -5186,7 +5221,10 @@ export default function ReadyToPack() {
                       {destinationDisplay}
                     </Typography>
                     <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
-                      <ShipmentFieldActionLink onClick={() => setAddressDialogOpen(true)}>
+                      <ShipmentFieldActionLink
+                        onClick={() => setAddressDialogOpen(true)}
+                        disabledReason={orderShipped ? "This shipment has already been shipped" : undefined}
+                      >
                         Update Address
                       </ShipmentFieldActionLink>
                     </ShipmentFieldActionArea>
@@ -5629,6 +5667,7 @@ export default function ReadyToPack() {
             {!isSortingStationView &&
             packingOrderUiStatus !== "cancelled" &&
             packingOrderUiStatus !== "onHold" &&
+            packingOrderUiStatus !== "shipped" &&
             !isLinkedOrderNonPrimaryTab ? (
               <>
                 <Divider sx={{ my: 3 }} />
@@ -7310,10 +7349,10 @@ function ItemBlock({
         </Box>
 
         <Stack
-          direction={{ xs: "column", lg: "row" }}
+          direction={{ xs: "column", xl: "row" }}
           flex={1}
           alignItems="flex-start"
-          spacing={{ xs: 2, lg: 0 }}
+          spacing={{ xs: 2, xl: 0 }}
           sx={{
             width: "100%",
             minWidth: 0,
@@ -7322,12 +7361,12 @@ function ItemBlock({
           <Stack
             spacing={0.5}
             sx={{
-              flex: packaging ? { lg: "1 1 0%" } : "1 1 auto",
+              flex: packaging ? { xl: "1 1 0%" } : "1 1 auto",
               minWidth: 0,
               width: "100%",
               boxSizing: "border-box",
-              pr: { lg: packaging ? 3 : 0 },
-              pb: packaging ? { xs: 2, lg: 0 } : 0,
+              pr: { xl: packaging ? 3 : 0 },
+              pb: packaging ? { xs: 2, xl: 0 } : 0,
               borderBottom: "none",
             }}
           >
@@ -7337,12 +7376,12 @@ function ItemBlock({
             <Stack
               spacing={0.5}
               sx={{
-                flex: { lg: "0 0 auto" },
-                width: { xs: "100%", lg: "fit-content" },
+                flex: { xl: "0 0 auto" },
+                width: { xs: "100%", xl: "fit-content" },
                 maxWidth: "100%",
-                alignSelf: { lg: "flex-start" },
+                alignSelf: { xl: "flex-start" },
                 boxSizing: "border-box",
-                pl: { lg: 3 },
+                pl: { xl: 3 },
               }}
             >
               {packaging}

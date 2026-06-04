@@ -1,6 +1,7 @@
 import type { Theme } from "@mui/material/styles";
 import CancelOutlinedIcon from "@mui/icons-material/CancelOutlined";
 import LocalMallOutlinedIcon from "@mui/icons-material/LocalMallOutlined";
+import LocalShippingOutlinedIcon from "@mui/icons-material/LocalShippingOutlined";
 import PauseCircleOutlineIcon from "@mui/icons-material/PauseCircleOutline";
 import PendingOutlinedIcon from "@mui/icons-material/PendingOutlined";
 import TaskAltIcon from "@mui/icons-material/TaskAlt";
@@ -60,6 +61,7 @@ export const STATUS_CHIP_PALETTE = {
 export type PackingOrderUiStatus =
   | "readyToPack"
   | "packed"
+  | "shipped"
   | "cancelled"
   | "pending"
   | "onHold"
@@ -69,6 +71,7 @@ export type PackingOrderUiStatus =
 export const PACKING_ORDER_UI_STATUSES: PackingOrderUiStatus[] = [
   "readyToPack",
   "packed",
+  "shipped",
   "cancelled",
   "pending",
   "onHold",
@@ -96,6 +99,15 @@ export function getPackingStatusChipConfig(status: PackingOrderUiStatus, _theme?
         Icon: TaskAltIcon,
         iconSize: 18,
         ...chipColors(STATUS_CHIP_PALETTE.packed),
+        border: false,
+        borderColor: "transparent",
+      } as const;
+    case "shipped":
+      return {
+        label: "Shipped",
+        Icon: LocalShippingOutlinedIcon,
+        iconSize: 18,
+        ...chipColors(STATUS_CHIP_PALETTE.shipped),
         border: false,
         borderColor: "transparent",
       } as const;
