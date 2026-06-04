@@ -5036,7 +5036,8 @@ export default function ReadyToPack() {
                         ) : null}
                       </Box>
                     </Stack>
-                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                    {/* Phase 1: hidden — restore by replacing false with shipmentDetailsEditUnlocked */}
+                    <ShipmentFieldActionArea visible={false}>
                       <ShipmentFieldActionLink onClick={() => setShipmentHistoryDialogOpen(true)}>
                         View History
                       </ShipmentFieldActionLink>
@@ -5220,7 +5221,8 @@ export default function ReadyToPack() {
                     >
                       {destinationDisplay}
                     </Typography>
-                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                    {/* Phase 1: hidden — restore by replacing false with shipmentDetailsEditUnlocked */}
+                    <ShipmentFieldActionArea visible={false}>
                       <ShipmentFieldActionLink
                         onClick={() => setAddressDialogOpen(true)}
                         disabledReason={orderShipped ? "This shipment has already been shipped" : undefined}
@@ -5250,7 +5252,8 @@ export default function ReadyToPack() {
                     sx={{ width: "100%", minWidth: 0 }}
                   >
                     <DetailValue>{displayedOrderNumberForDetails ?? ""}</DetailValue>
-                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
+                    {/* Phase 1: hidden — restore by replacing false with shipmentDetailsEditUnlocked */}
+                    <ShipmentFieldActionArea visible={false}>
                       <ShipmentFieldActionLink onClick={() => setOrderHistoryDialogOpen(true)}>
                         View History
                       </ShipmentFieldActionLink>
