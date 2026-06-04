@@ -5036,8 +5036,7 @@ export default function ReadyToPack() {
                         ) : null}
                       </Box>
                     </Stack>
-                    {/* Phase 1: hidden — restore by replacing false with shipmentDetailsEditUnlocked */}
-                    <ShipmentFieldActionArea visible={false}>
+                    <ShipmentFieldActionArea visible={shipmentDetailsEditUnlocked}>
                       <ShipmentFieldActionLink onClick={() => setShipmentHistoryDialogOpen(true)}>
                         View History
                       </ShipmentFieldActionLink>
